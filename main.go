@@ -114,22 +114,30 @@ func renderKittyImage(path string, col, row, w, h int) {
 
 		isLast := (end >= len(encoded))
 
+		// Pixel coordinates for positioning
+		// x=left edge in pixels, y=top edge in pixels
+		// Each terminal cell = 8px wide × 16px tall
+		xPx := col * 8
+		yPx := row * 16
+
 		var seq string
 		if i == 0 {
-			// First chunk: full header with dimensions
+			// First chunk: full header with dimensions and positioning
 			// a=T: transmit-and-display action
 			// f=32: RGBA format
-			// s=,v=: pixel dimensions
+			// s=,v=: pixel dimensions of source image
+			// x=,y=: pixel position where image top-left starts
+			// C=1: composition mode — image composites under text (persistent)
 			// o=z: zlib compression
 			// m=1/m=0: more chunks indicator
-			seq = fmt.Sprintf("\033_Ga=T,f=32,s=%d,v=%d,o=z,m=%d;%s\033\\",
-				w*8, h*16, boolToInt(!isLast), chunk)
+			seq = fmt.Sprintf("\033_Ga=T,f=32,s=%d,v=%d,x=%d,y=%d,C=1,o=z,m=%d;%s\033\\",
+				w*8, h*16, xPx, yPx, boolToInt(!isLast), chunk)
 		} else {
-			// Subsequent chunks
+			// Subsequent chunks: only m= (more chunks) needed
 			seq = fmt.Sprintf("\033_Gm=%d;%s\033\\",
 				boolToInt(!isLast), chunk)
 		}
-		os.Stderr.WriteString(seq)
+		os.Stdout.WriteString(seq)
 	}
 }
 
