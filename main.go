@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -66,106 +65,28 @@ func (m menuItem) Description() string { return m.desc }
 func (m menuItem) FilterValue() string { return m.title }
 
 type settingsActionMsg struct{ err error }
-type renderImageMsg struct{ path string }
 
-// ─── Kitty Graphics Protocol ──────────────────────────────────────────────────
+var debugLog *os.File
 
-const (
-	kittyChunkSize = 4096
-)
-
-// renderKittyImage sends image using Kitty Graphics Protocol
-// Based on fastfetch implementation: uses base64-encoded PNG data
-func renderKittyImage(path string, col, row, w, h int) {
-	if path == "" {
-		return
-	}
-
-	data, err := os.ReadFile(path)
+func init() {
+	var err error
+	debugLog, err = os.OpenFile("/tmp/student-picker.log", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
-		return
-	}
-
-	// Convert to PNG using ImageMagick for consistent format
-	cmd := exec.Command("magick", "convert", path, "png:-")
-	var pngBuf strings.Builder
-	cmd.Stdout = &pngBuf
-	if err := cmd.Run(); err != nil {
-		// Fallback: use original file data
-		pngBuf.Reset()
-		pngBuf.Write(data)
-	}
-
-	imgData := pngBuf.String()
-	if len(imgData) == 0 {
-		return
-	}
-
-	// Base64 encode the image data
-	encoded := base64.StdEncoding.EncodeToString([]byte(imgData))
-
-	// Send in chunks (Kitty protocol requires chunking for large data)
-	for i := 0; i < len(encoded); i += kittyChunkSize {
-		end := i + kittyChunkSize
-		if end > len(encoded) {
-			end = len(encoded)
-		}
-		chunk := encoded[i:end]
-
-		isLast := (end >= len(encoded))
-
-		// Pixel coordinates for positioning
-		// x=left edge in pixels, y=top edge in pixels
-		// Each terminal cell = 8px wide × 16px tall
-		xPx := col * 8
-		yPx := row * 16
-
-		var seq string
-		if i == 0 {
-			// First chunk: full header with dimensions and positioning
-			// a=T: transmit-and-display action
-			// f=32: RGBA format
-			// s=,v=: pixel dimensions of source image
-			// x=,y=: pixel position where image top-left starts
-			// C=1: composition mode — image composites under text (persistent)
-			// o=z: zlib compression
-			// m=1/m=0: more chunks indicator
-			seq = fmt.Sprintf("\033_Ga=T,f=32,s=%d,v=%d,x=%d,y=%d,C=1,o=z,m=%d;%s\033\\",
-				w*8, h*16, xPx, yPx, boolToInt(!isLast), chunk)
-		} else {
-			// Subsequent chunks: only m= (more chunks) needed
-			seq = fmt.Sprintf("\033_Gm=%d;%s\033\\",
-				boolToInt(!isLast), chunk)
-		}
-		os.Stdout.WriteString(seq)
+		debugLog = nil
 	}
 }
 
-func boolToInt(b bool) int {
-	if b {
-		return 1
+func debug(format string, args ...interface{}) {
+	if debugLog != nil {
+		msg := fmt.Sprintf(format, args...)
+		debugLog.WriteString(msg + "\n")
+		debugLog.Sync()
 	}
-	return 0
 }
 
-func renderImagePreview(path string, xOffset, w, h int) {
-	if path == "" || !fileExists(path) {
-		return
-	}
-
-	// Check TERM for reliable Kitty detection
-	if strings.Contains(os.Getenv("TERM"), "kitty") {
-		// xOffset is calculated by caller based on terminal width
-		// The key is C=1 composition mode so image persists
-		renderKittyImage(path, xOffset, 1, w, h)
-		return
-	}
-
-	if cmd := exec.Command("which", "chafa"); cmd.Run() == nil {
-		cmd := exec.Command("chafa", "--size", fmt.Sprintf("%dx%d", w, h), path)
-		cmd.Stdout = os.Stdout
-		cmd.Run()
-	}
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
 }
 
 var (
@@ -261,6 +182,11 @@ func newModel(students []Student) model {
 	if len(students) > 0 {
 		m.currentImage = students[0].ImagePath()
 	}
+
+	if strings.Contains(os.Getenv("TERM"), "kitty") || os.Getenv("KITTY_WINDOW_ID") != "" {
+		debug("TERM=%s, using termimg with Kitty protocol", os.Getenv("TERM"))
+	}
+
 	return m
 }
 
@@ -302,9 +228,6 @@ func newSettingsList() list.Model {
 }
 
 func (m model) Init() tea.Cmd {
-	if m.currentImage != "" {
-		return func() tea.Msg { return renderImageMsg{path: m.currentImage} }
-	}
 	return nil
 }
 
@@ -319,32 +242,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.list.SetSize(listW, m.height-4)
 		m.settingsList.SetSize(m.width-8, 8)
-		if m.screen == screenMain {
-			return m, func() tea.Msg { return renderImageMsg{path: m.currentImage} }
-		}
-		return m, nil
-
-	case renderImageMsg:
-		if m.screen == screenMain && msg.path != "" {
-			// Calculate x offset for right panel: left panel width + gap + border
-			listW := m.width - previewW - 6
-			if listW < 30 {
-				listW = 30
-			}
-			xOffset := listW + 3 // gap(1) + border(1) + padding(1) = 3
-			renderImagePreview(msg.path, xOffset, previewW-2, previewH-2)
-		}
-		return m, nil
-
-	case settingsActionMsg:
-		if msg.err != nil {
-			m.status = "ERROR: " + msg.err.Error()
-			m.statusIsErr = true
-		} else {
-			m.status = "SUCCESS"
-			m.statusIsErr = false
-		}
-		m.settingsList = newSettingsList()
 		return m, nil
 
 	case tea.KeyMsg:
@@ -354,25 +251,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case screenSettings:
 			return m.updateSettings(msg)
 		}
+
+	default:
+		var cmd tea.Cmd
+		if m.screen == screenMain {
+			prevIdx := m.list.Index()
+			m.list, cmd = m.list.Update(msg)
+			if m.list.Index() != prevIdx {
+				if s, ok := m.list.SelectedItem().(Student); ok {
+					m.currentImage = s.ImagePath()
+					cmd = m.renderKittyImage()
+				}
+			}
+		} else {
+			m.settingsList, cmd = m.settingsList.Update(msg)
+		}
+		return m, cmd
 	}
 
-	var cmd tea.Cmd
-	if m.screen == screenMain {
-		prevIdx := m.list.Index()
-		m.list, cmd = m.list.Update(msg)
-		if m.list.Index() != prevIdx {
-			if s, ok := m.list.SelectedItem().(Student); ok {
-				m.currentImage = s.ImagePath()
-			}
-		}
-	} else {
-		m.settingsList, cmd = m.settingsList.Update(msg)
-	}
-	return m, cmd
+	return m, nil
 }
 
 func (m model) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Nếu đang filter thì pass hết vào list, không intercept
 	if m.list.FilterState() == list.Filtering {
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
@@ -394,7 +294,7 @@ func (m model) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !ok {
 			return m, nil
 		}
-		if err := updateFastfetchImage(s.ImagePath()); err != nil {
+		if err := updateFastfetchImage(s.ImagePath(), m.height); err != nil {
 			m.status = fmt.Sprintf("ERROR: %v", err)
 			m.statusIsErr = true
 		} else {
@@ -404,23 +304,20 @@ func (m model) updateMain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
-	// Pass tất cả key khác (j/k/↑/↓//) xuống list
 	prevIdx := m.list.Index()
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
 	if m.list.Index() != prevIdx {
 		if s, ok := m.list.SelectedItem().(Student); ok {
 			m.currentImage = s.ImagePath()
-			// Render ảnh mới khi selection thay đổi
-			return m, tea.Batch(cmd, func() tea.Msg {
-				return renderImageMsg{path: m.currentImage}
-			})
+			cmd = m.renderKittyImage()
 		}
 	}
 	return m, cmd
 }
 
 func (m model) updateSettings(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 	switch msg.String() {
 	case "ctrl+c":
 		return m, tea.Quit
@@ -429,8 +326,7 @@ func (m model) updateSettings(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.screen = screenMain
 		m.status = ""
 		m.viewingConfig = ""
-		// Re-render ảnh khi quay về main
-		return m, func() tea.Msg { return renderImageMsg{path: m.currentImage} }
+		return m, nil
 
 	case "enter":
 		item, ok := m.settingsList.SelectedItem().(menuItem)
@@ -463,6 +359,9 @@ func (m model) updateSettings(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+	default:
+		m.settingsList, cmd = m.settingsList.Update(msg)
+		return m, cmd
 	}
 	return m, nil
 }
@@ -510,30 +409,100 @@ func (m model) renderPreview() string {
 			Width(previewW-2).Height(previewH-2).
 			Align(lipgloss.Center, lipgloss.Center).
 			Foreground(lipgloss.Color("#6C7086")).
-			Render("No image")
+			Render("No image\n\n\n\n\n")
 	}
 
 	imgW, imgH := getImageDimensions(m.currentImage)
 	fastW, fastH := calculateFastfetchSize(imgH, imgW)
-
 	info, _ := os.Stat(m.currentImage)
 	size := formatFileSize(info.Size())
 
-	preview := lipgloss.NewStyle().
-		Width(previewW-2).Height(previewH-2).
-		Align(lipgloss.Left, lipgloss.Top).
-		Foreground(lipgloss.Color("#A6E3A1"))
+	isKitty := strings.Contains(os.Getenv("TERM"), "kitty") || os.Getenv("KITTY_WINDOW_ID") != ""
+	if !isKitty {
+		return lipgloss.NewStyle().
+			Width(previewW-2).Height(previewH-2).
+			Align(lipgloss.Center, lipgloss.Center).
+			Foreground(lipgloss.Color("#6C7086")).
+			Render(fmt.Sprintf(`No Kitty terminal
 
-	return preview.Render(fmt.Sprintf(`
-  [Preview]
+%s
+%d×%d (%s)
+fastfetch: %d×%d`, filepath.Base(m.currentImage), imgW, imgH, size, fastW, fastH))
+	}
 
-  %s
-  %dx%d (%s)
-  fastfetch: %dx%d
+	return lipgloss.NewStyle().
+		Width(previewW - 2).
+		Height(previewH - 2).
+		Render("")
+}
 
-  (Run fastfetch to
-   see actual image)
-`, filepath.Base(m.currentImage), imgW, imgH, size, fastW, fastH))
+func (m model) renderKittyImage() tea.Cmd {
+	return func() tea.Msg {
+		if m.currentImage == "" || !fileExists(m.currentImage) {
+			return nil
+		}
+
+		isKitty := strings.Contains(os.Getenv("TERM"), "kitty") || os.Getenv("KITTY_WINDOW_ID") != ""
+		if !isKitty {
+			return nil
+		}
+
+		imagePath := m.currentImage
+		needsConversion := strings.ToLower(filepath.Ext(m.currentImage)) == ".webp"
+		if needsConversion {
+			tmpFile := filepath.Join(os.TempDir(), "student-picker-"+filepath.Base(m.currentImage)+".png")
+			cmd := exec.Command("magick", "convert", m.currentImage, tmpFile)
+			if err := cmd.Run(); err != nil {
+				debug("FAIL: magick convert: %v", err)
+				return nil
+			}
+			imagePath = tmpFile
+			defer os.Remove(tmpFile)
+		}
+
+		ext := strings.ToLower(filepath.Ext(imagePath))
+		if ext != ".png" && ext != ".jpg" && ext != ".jpeg" {
+			return nil
+		}
+
+		tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+		if err != nil {
+			debug("FAIL: open /dev/tty: %v", err)
+			return nil
+		}
+		defer tty.Close()
+
+		tty.WriteString("\x1b_Ga=d,d=A\x1b\\")
+
+		x := m.width - previewW - 1
+		y := 2
+		w, h := previewW-3, previewH-2
+
+		buf := make([]byte, 0, w*h)
+		for i := 0; i < h; i++ {
+			buf = append(buf, fmt.Sprintf("\x1b[%d;%dH", y+i, x+1)...)
+			buf = append(buf, strings.Repeat(" ", w)...)
+		}
+		tty.Write(buf)
+
+		cmd := exec.Command("kitty", "+icat", "--silent",
+			"--stdin=no",
+			"--transfer-mode=stream",
+			"--place", fmt.Sprintf("%dx%d@%dx%d", w, h, x, y),
+			imagePath,
+		)
+		cmd.Stdin = nil
+		cmd.Stdout = tty
+		cmd.Stderr = tty
+
+		if err := cmd.Run(); err != nil {
+			debug("FAIL: kitty icat: %v", err)
+			return nil
+		}
+
+		debug("OK: rendered image via kitty icat at x=%d,y=%d", x, y)
+		return nil
+	}
 }
 
 func calculateFastfetchSize(imgH, imgW int) (int, int) {
@@ -545,9 +514,7 @@ func calculateFastfetchSize(imgH, imgW int) (int, int) {
 	}
 	aspect := float64(imgH) / float64(imgW)
 
-	// Portrait: height > width
 	if aspect >= 1.0 {
-		// Use max height → gives narrower display for tall images
 		h := maxH
 		w := int(float64(h) / aspect)
 		if w < minW {
@@ -556,7 +523,6 @@ func calculateFastfetchSize(imgH, imgW int) (int, int) {
 		return w, h
 	}
 
-	// Landscape or nearly-square: use max width → gives wider display
 	w := maxW
 	h := int(float64(w) * aspect)
 	if h < minH {
@@ -647,8 +613,7 @@ func uninstallConfig() error {
 	return os.Remove(bakPath)
 }
 
-func updateFastfetchImage(imagePath string) error {
-	// Auto backup if no backup exists
+func updateFastfetchImage(imagePath string, termLines int) error {
 	bakPath := fastfetchConfig + backupSuffix
 	if !fileExists(bakPath) && fileExists(fastfetchConfig) {
 		if err := copyFile(fastfetchConfig, bakPath); err != nil {
@@ -656,22 +621,24 @@ func updateFastfetchImage(imagePath string) error {
 		}
 	}
 
-	// Calculate width based on image aspect ratio
 	imgW, imgH := getImageDimensions(imagePath)
-	fastW := 30
-	if imgW > 0 {
-		aspect := float64(imgH) / float64(imgW)
-		if aspect >= 1.0 {
-			fastW = 45
-		} else {
-			fastW = 35
-		}
-		if fastW < 15 {
-			fastW = 15
-		}
+	if imgW == 0 || imgH == 0 {
+		imgW, imgH = 30, 20
 	}
 
-	// Use jq to safely update only the fields we need
+	targetHeight := float64(termLines) * 0.88
+	cellRatio := 0.544
+	fastW := int(targetHeight * float64(imgW) / float64(imgH) / cellRatio)
+
+	minW := 15
+	maxW := 50
+	if fastW < minW {
+		fastW = minW
+	}
+	if fastW > maxW {
+		fastW = maxW
+	}
+
 	cmd := exec.Command("jq",
 		fmt.Sprintf(`.logo.source = "%s" | .logo.type = "kitty" | .logo.width = %d`, imagePath, fastW),
 		fastfetchConfig,
@@ -683,8 +650,6 @@ func updateFastfetchImage(imagePath string) error {
 
 	return os.WriteFile(fastfetchConfig, output, 0644)
 }
-
-// replaceConfigValue removed - using jq instead
 
 func getImageDimensions(imagePath string) (int, int) {
 	cmd := exec.Command("magick", "identify", "-format", "%w %h", imagePath)
@@ -698,11 +663,6 @@ func getImageDimensions(imagePath string) (int, int) {
 		return 30, 20
 	}
 	return w, h
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return !os.IsNotExist(err)
 }
 
 func formatFileSize(bytes int64) string {
