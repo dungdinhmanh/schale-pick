@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -27,6 +28,20 @@ const (
 	screenSettings
 )
 
+type modalKind int
+
+const (
+	modalNone modalKind = iota
+	modalBackupConfirm
+)
+
+type modal struct {
+	kind      modalKind
+	message   string
+	studentId int
+	activeBtn int
+}
+
 var (
 	styleGridBorder = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
@@ -40,6 +55,11 @@ var (
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(lipgloss.Color("#CBA6F7"))
 
+	styleModalBorder = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("#F38BA8")).
+				Padding(1, 2)
+
 	styleHelp = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#6C7086")).
 			Italic(true)
@@ -51,6 +71,31 @@ var (
 	styleError = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#F38BA8")).
 			Bold(true)
+
+	styleTitle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#89B4FA")).
+			Bold(true)
+
+	styleBtnActive = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#CDD6F4")).
+			Background(lipgloss.Color("#89B4FA")).
+			Padding(0, 2).
+			Bold(true)
+
+	styleBtnInactive = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#6C7086")).
+				Background(lipgloss.Color("#45475A")).
+				Padding(0, 2)
+
+	styleMasterBox = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#CBA6F7")).
+			Padding(0, 1)
+
+	styleSearchBar = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#89B4FA")).
+			Padding(0, 1)
 )
 
 type model struct {
@@ -70,8 +115,11 @@ type model struct {
 	loading     bool
 	status      string
 	statusIsErr bool
+	statusTimer time.Time
 	previewPath string
 	iconPaths   map[int]string
+	modal       modal
+	hasMagick   bool
 }
 
 func newModel() model {
@@ -84,15 +132,33 @@ func newModel() model {
 		downloader: NewDownloader(5),
 		loading:    true,
 		iconPaths:  make(map[int]string),
+		hasMagick:  checkMagick(),
 	}
 }
 
+func checkMagick() bool {
+	_, err := exec.LookPath("magick")
+	return err == nil
+}
+
 func (m model) Init() tea.Cmd {
-	return fetchManifestCmd
+	return tea.Batch(fetchManifestCmd, checkMagickCmd)
+}
+
+func checkMagickCmd() tea.Msg {
+	return magickCheckMsg{available: checkMagick()}
+}
+
+type magickCheckMsg struct {
+	available bool
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case magickCheckMsg:
+		m.hasMagick = msg.available
+		return m, nil
+
 	case manifestLoadedMsg:
 		m.manifest = msg.students
 		m.filtered = msg.students
@@ -106,13 +172,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.gridCols = (m.width - PreviewW - 6) / thumbW
+		// Account for: left border(1) + right border(1) + gap(1) + preview border(1) = 4
+		m.gridCols = (m.width - PreviewW - 4) / thumbW
 		if m.gridCols < 2 {
 			m.gridCols = 2
 		}
+		m.clampOffset()
 		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch())
 
 	case tea.KeyPressMsg:
+		if m.modal.kind != modalNone {
+			return m.handleModalKey(msg)
+		}
 		if m.screen == screenSettings {
 			return m.handleSettingsKey(msg)
 		}
@@ -120,6 +191,52 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSearchKey(msg)
 		}
 		return m.handleNormalKey(msg)
+
+	case statusClearMsg:
+		if time.Now().After(m.statusTimer) {
+			m.status = ""
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+type statusClearMsg struct{}
+
+func statusClearCmd() tea.Cmd {
+	return tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+		return statusClearMsg{}
+	})
+}
+
+func (m model) handleModalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "left", "h":
+		if m.modal.activeBtn > 0 {
+			m.modal.activeBtn--
+		}
+		return m, nil
+
+	case "right", "l":
+		if m.modal.activeBtn < 1 {
+			m.modal.activeBtn++
+		}
+		return m, nil
+
+	case "enter":
+		if m.modal.activeBtn == 0 {
+			// Yes - proceed with backup and save
+			studentId := m.modal.studentId
+			m.modal = modal{kind: modalNone}
+			return m, m.cacheAndSelectWithBackup(studentId)
+		}
+		// No - cancel
+		m.modal = modal{kind: modalNone}
+		return m, nil
+
+	case "esc":
+		m.modal = modal{kind: modalNone}
+		return m, nil
 	}
 	return m, nil
 }
@@ -141,17 +258,20 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.tab = TabBrowse
 		}
 		m.gridIdx = 0
+		m.gridOffset = 0
 		return m, nil
 
 	case "left", "h":
 		if m.gridIdx > 0 {
 			m.gridIdx--
+			m.clampOffset()
 			return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch())
 		}
 
 	case "right", "l":
 		if m.gridIdx < len(m.getCurrentItems())-1 {
 			m.gridIdx++
+			m.clampOffset()
 			return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch())
 		}
 
@@ -160,6 +280,7 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.gridIdx < 0 {
 			m.gridIdx = 0
 		}
+		m.clampOffset()
 		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch())
 
 	case "down", "j":
@@ -168,6 +289,7 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.gridIdx > maxIdx {
 			m.gridIdx = maxIdx
 		}
+		m.clampOffset()
 		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch())
 
 	case "/":
@@ -234,6 +356,65 @@ func (m model) handleSettingsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *model) clampOffset() {
+	items := m.getCurrentItems()
+	if len(items) == 0 {
+		m.gridOffset = 0
+		return
+	}
+
+	visibleRows := m.visibleRows()
+	if visibleRows <= 0 {
+		return
+	}
+
+	// Calculate which row the current selection is in
+	selRow := m.gridIdx / m.gridCols
+
+	// Calculate first and last visible rows
+	firstVisibleRow := m.gridOffset
+	lastVisibleRow := m.gridOffset + visibleRows - 1
+
+	// Scroll up if selection is above visible area
+	if selRow < firstVisibleRow {
+		m.gridOffset = selRow
+	}
+
+	// Scroll down if selection is below visible area
+	if selRow > lastVisibleRow {
+		m.gridOffset = selRow - visibleRows + 1
+	}
+
+	// Ensure offset is not negative
+	if m.gridOffset < 0 {
+		m.gridOffset = 0
+	}
+
+	// Ensure we don't scroll past the last row
+	maxOffset := (len(items)-1)/m.gridCols - visibleRows + 1
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if m.gridOffset > maxOffset {
+		m.gridOffset = maxOffset
+	}
+}
+
+func (m model) visibleRows() int {
+	// Account for: tabs (1), status line (1), help (1), panel borders (2)
+	headerLines := 1 // tabs
+	footerLines := 2 // status + help
+	borderLines := 2 // top + bottom borders of panel
+
+	availableHeight := m.height - headerLines - footerLines - borderLines
+
+	rows := availableHeight / thumbH
+	if rows < 1 {
+		rows = 1
+	}
+	return rows
+}
+
 func (m *model) getCurrentItems() []Student {
 	if m.tab == TabBrowse {
 		return m.filtered
@@ -258,6 +439,7 @@ func (m *model) applyFilter() {
 		m.filtered = filterStudents(m.manifest, m.searchQuery)
 	}
 	m.gridIdx = 0
+	m.gridOffset = 0
 }
 
 func (m *model) preCachePortraits() {
@@ -282,6 +464,37 @@ func (m *model) preCachePortraits() {
 
 func (m model) cacheAndSelect(studentId int) tea.Cmd {
 	return func() tea.Msg {
+		// Check if backup exists
+		bakPath := fastfetchConfig + backupSuffix
+		if !fileExists(bakPath) && fileExists(fastfetchConfig) {
+			// Return modal request instead of auto-backup
+			return showModalMsg{
+				kind:      modalBackupConfirm,
+				message:   "Backup not found. Create backup before saving?",
+				studentId: studentId,
+			}
+		}
+
+		// Backup exists, proceed with normal save
+		return m.doCacheAndSelect(studentId)()
+	}
+}
+
+func (m model) cacheAndSelectWithBackup(studentId int) tea.Cmd {
+	return func() tea.Msg {
+		// Create backup first
+		if fileExists(fastfetchConfig) {
+			bakPath := fastfetchConfig + backupSuffix
+			if err := copyFile(fastfetchConfig, bakPath); err != nil {
+				return cacheErrorMsg{err: fmt.Errorf("backup failed: %w", err)}
+			}
+		}
+		return m.doCacheAndSelect(studentId)()
+	}
+}
+
+func (m model) doCacheAndSelect(studentId int) tea.Cmd {
+	return func() tea.Msg {
 		iconData, err := m.downloader.DownloadIcon(studentId)
 		if err != nil {
 			return cacheErrorMsg{err: err}
@@ -300,7 +513,7 @@ func (m model) cacheAndSelect(studentId int) tea.Cmd {
 		if err := updateFastfetchImage(cached.PortraitPath, m.height); err != nil {
 			return cacheErrorMsg{err: err}
 		}
-		return nil
+		return cacheSuccessMsg{studentId: studentId}
 	}
 }
 
@@ -313,12 +526,22 @@ func (m model) selectInstalled(studentId int) tea.Cmd {
 		if err := updateFastfetchImage(cached.PortraitPath, m.height); err != nil {
 			return cacheErrorMsg{err: err}
 		}
-		return nil
+		return cacheSuccessMsg{studentId: studentId}
 	}
 }
 
 type cacheErrorMsg struct {
 	err error
+}
+
+type cacheSuccessMsg struct {
+	studentId int
+}
+
+type showModalMsg struct {
+	kind      modalKind
+	message   string
+	studentId int
 }
 
 func (m model) View() tea.View {
@@ -340,29 +563,155 @@ func (m model) View() tea.View {
 func (m model) viewMain() string {
 	gridContent := m.renderGrid()
 	previewContent := m.renderPreview()
-	tabsContent := m.renderTabs()
+
+	browseCount := len(m.filtered)
+	installedCount := len(m.cache.List())
 
 	gridW := m.width - PreviewW - 4
 	if gridW < thumbW {
 		gridW = thumbW
 	}
 
-	leftPanel := styleGridBorder.Width(gridW).Render(tabsContent + "\n" + gridContent)
-	rightPanel := stylePreviewBorder.Width(PreviewW).Height(PreviewH).Render(previewContent)
+	var leftContent string
+	if m.searchMode {
+		searchQuery := m.searchQuery + "█"
+		searchBar := styleSearchBar.Width(gridW - 2).Render(searchQuery)
+		leftContent = searchBar + "\n" + gridContent
+	} else {
+		tabsContent := m.renderTabs()
+		leftContent = tabsContent + "\n" + gridContent
+	}
+
+	leftPanel := styleGridBorder.Width(gridW).Render(leftContent)
+	rightPanel := stylePreviewBorder.Width(PreviewW).Render(previewContent)
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, " ", rightPanel)
+
+	titleText := fmt.Sprintf(" Browse (%d) / Installed (%d) ", browseCount, installedCount)
+	masterBox := styleMasterBox.Width(m.width - 2).Render(body)
+	titleLine := renderBorderTitle(titleText, m.width-2)
+	masterContent := titleLine + "\n" + masterBox
 
 	statusLine := ""
 	if m.status != "" {
 		if m.statusIsErr {
 			statusLine = styleError.Render("! " + m.status)
 		} else {
-			statusLine = styleSuccess.Render("OK " + m.status)
+			statusLine = styleSuccess.Render("✓ " + m.status)
 		}
 	}
 
-	help := styleHelp.Render("h/j/k/l: move | /: search | Tab: switch | i: settings | Enter: select | q: quit")
+	var help string
+	if m.searchMode {
+		help = styleHelp.Render("Type to search... | Enter: confirm | Esc: cancel")
+	} else {
+		help = styleHelp.Render("h/j/k/l: move | /: search | Tab: switch | i: settings | Enter: select | q: quit")
+	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, body, statusLine, help)
+	mainContent := lipgloss.JoinVertical(lipgloss.Left, masterContent, statusLine, help)
+
+	if m.modal.kind != modalNone {
+		return m.renderModalOverlay(mainContent)
+	}
+
+	return mainContent
+}
+
+func renderBorderTitle(title string, panelWidth int) string {
+	// Create a line like: ┌─ Title ───────────────────
+	// The title sits in the middle of the top border
+	titleStyled := styleTitle.Render(title)
+	titleLen := lipgloss.Width(titleStyled)
+
+	// Calculate padding
+	remaining := panelWidth - titleLen - 2 // -2 for corner chars
+	if remaining < 0 {
+		remaining = 0
+	}
+	leftPad := remaining / 2
+
+	borderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#89B4FA"))
+	leftBorder := borderStyle.Render("─" + strings.Repeat("─", leftPad))
+	rightBorder := borderStyle.Render(strings.Repeat("─", remaining-leftPad) + "┐")
+
+	return "┌" + leftBorder + titleStyled + rightBorder
+}
+
+func (m model) renderModalOverlay(bg string) string {
+	// Render modal content
+	btnYes := "Yes"
+	btnNo := "No"
+
+	if m.modal.activeBtn == 0 {
+		btnYes = styleBtnActive.Render("[Yes]")
+		btnNo = styleBtnInactive.Render(" No ")
+	} else {
+		btnYes = styleBtnInactive.Render(" Yes ")
+		btnNo = styleBtnActive.Render("[No]")
+	}
+
+	buttons := lipgloss.JoinHorizontal(lipgloss.Center, btnYes, "  ", btnNo)
+	modalContent := lipgloss.JoinVertical(lipgloss.Center,
+		"",
+		m.modal.message,
+		"",
+		buttons,
+		"",
+	)
+
+	modalBox := styleModalBorder.Width(50).Render(modalContent)
+
+	// Center modal on screen
+	overlay := lipgloss.Place(m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		modalBox,
+	)
+
+	// Overlay modal on background
+	return placeOverlay(0, 0, overlay, bg, false)
+}
+
+func placeOverlay(x, y int, fg, bg string, shadow bool) string {
+	fgLines := strings.Split(fg, "\n")
+	bgLines := strings.Split(bg, "\n")
+
+	fgHeight := len(fgLines)
+	bgHeight := len(bgLines)
+	fgWidth := 0
+	for _, l := range fgLines {
+		if w := lipgloss.Width(l); w > fgWidth {
+			fgWidth = w
+		}
+	}
+
+	if fgHeight >= bgHeight && fgWidth >= lipgloss.Width(bg) {
+		return fg
+	}
+
+	var result strings.Builder
+	for i, bgLine := range bgLines {
+		if i > 0 {
+			result.WriteByte('\n')
+		}
+		if i < y || i >= y+fgHeight {
+			result.WriteString(bgLine)
+			continue
+		}
+
+		// Overlay fg line onto bg line at position x
+		fgLine := fgLines[i-y]
+		bgRunes := []rune(bgLine)
+		fgRunes := []rune(fgLine)
+
+		for j := 0; j < len(bgRunes); j++ {
+			if j >= x && j < x+len(fgRunes) && j-x < len(fgRunes) {
+				result.WriteRune(fgRunes[j-x])
+			} else {
+				result.WriteRune(bgRunes[j])
+			}
+		}
+	}
+
+	return result.String()
 }
 
 func (m model) viewSettings() string {
@@ -375,21 +724,34 @@ func (m model) viewSettings() string {
 	statsLine := lipgloss.Style{}.Foreground(lipgloss.Color("#A6E3A1")).Render("Installed: ") +
 		lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(fmt.Sprintf("%d students", len(cachedItems)))
 
+	magickStatus := "not available"
+	if m.hasMagick {
+		magickStatus = "available"
+	}
+	magickLine := lipgloss.Style{}.Foreground(lipgloss.Color("#CBA6F7")).Render("ImageMagick: ") +
+		lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(magickStatus)
+
 	infoBlock := lipgloss.JoinVertical(lipgloss.Left,
 		" "+cfgLine,
 		" "+statsLine,
+		" "+magickLine,
 	)
 
+	settingsTitleLine := renderBorderTitle(" Settings ", m.width-4)
 	contentBlock := styleSettingsBorder.Width(m.width - 4).Height(8).Render(
 		lipgloss.NewStyle().Padding(1, 2).Render("Settings\n\nPress 'q', 'b', or 'esc' to go back"),
 	)
+	// Prepend title line
+	contentBlock = settingsTitleLine + "\n" + contentBlock
+
+	contentBlock = settingsTitleLine + "\n" + styleSettingsBorder.Width(m.width-4).Render("Press 'q', 'b', or 'esc' to go back")
 
 	statusLine := ""
 	if m.status != "" {
 		if m.statusIsErr {
 			statusLine = styleError.Render("! " + m.status)
 		} else {
-			statusLine = styleSuccess.Render("OK " + m.status)
+			statusLine = styleSuccess.Render("✓ " + m.status)
 		}
 	}
 
@@ -412,24 +774,37 @@ func (m model) renderTabs() string {
 
 func (m model) renderGrid() string {
 	items := m.getCurrentItems()
+	gridW := m.width - PreviewW - 4
+	if gridW < thumbW {
+		gridW = thumbW
+	}
+
 	if len(items) == 0 {
 		return lipgloss.NewStyle().
 			Width(thumbW*m.gridCols).
-			Height(m.height-4).
+			MaxWidth(gridW).
 			Align(lipgloss.Center, lipgloss.Center).
 			Foreground(lipgloss.Color("#6C7086")).
 			Render("No students")
 	}
 
-	var lines []string
-	rowCount := (len(items) + m.gridCols - 1) / m.gridCols
+	visibleRows := m.visibleRows()
+	startRow := m.gridOffset
+	endRow := startRow + visibleRows
 
-	for row := 0; row < rowCount; row++ {
+	totalRows := (len(items) + m.gridCols - 1) / m.gridCols
+	if endRow > totalRows {
+		endRow = totalRows
+	}
+
+	var lines []string
+
+	for row := startRow; row < endRow; row++ {
 		var rowItems []string
 		for col := 0; col < m.gridCols; col++ {
 			idx := row*m.gridCols + col
 			if idx >= len(items) {
-				rowItems = append(rowItems, strings.Repeat(" ", thumbW))
+				rowItems = append(rowItems, strings.Repeat(" ", thumbW-2))
 			} else {
 				student := items[idx]
 				item := m.renderGridItem(student, idx == m.gridIdx)
@@ -439,9 +814,11 @@ func (m model) renderGrid() string {
 		lines = append(lines, lipgloss.JoinHorizontal(lipgloss.Top, rowItems...))
 	}
 
-	return lipgloss.NewStyle().
-		Width(m.gridCols * thumbW).
-		Render(strings.Join(lines, ""))
+	if len(lines) == 0 {
+		return ""
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func (m model) getVisibleIconBatch() tea.Cmd {
@@ -453,22 +830,33 @@ func (m model) getVisibleIconBatch() tea.Cmd {
 			return nil
 		}
 
-		for i, student := range items {
-			iconPath := ensureIconCached(student.Id, m.downloader)
-			if iconPath == "" {
-				continue
+		visibleRows := m.visibleRows()
+		startRow := m.gridOffset
+		endRow := startRow + visibleRows
+
+		for row := startRow; row < endRow; row++ {
+			for col := 0; col < m.gridCols; col++ {
+				idx := row*m.gridCols + col
+				if idx >= len(items) {
+					continue
+				}
+
+				student := items[idx]
+				iconPath := ensureIconCached(student.Id, m.downloader)
+				if iconPath == "" {
+					continue
+				}
+
+				// Calculate position relative to visible area
+				visibleRow := row - m.gridOffset
+				gridX := 2 + col*thumbW
+				gridY := 3 + visibleRow*thumbH
+
+				iconW := thumbW - 4
+				iconH := thumbH - 3
+
+				_ = renderImageTermimg(iconPath, gridX, gridY, iconW, iconH)
 			}
-
-			col := i % m.gridCols
-			row := i / m.gridCols
-
-			gridX := 2 + col*thumbW
-			gridY := 3 + row*thumbH
-
-			iconW := thumbW - 4
-			iconH := thumbH - 3
-
-			_ = renderImageTermimg(iconPath, gridX, gridY, iconW, iconH)
 		}
 		return nil
 	}
@@ -484,32 +872,32 @@ func (m model) renderGridItem(s Student, selected bool) string {
 		nameColor = "#CDD6F4"
 	}
 
-	border := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(borderColor)).
-		Width(thumbW - 1).
-		Height(thumbH - 1)
+	innerW := thumbW - 2
+	innerH := thumbH - 2
 
 	name := s.PersonalName
-	if len(name) > thumbW-4 {
-		name = name[:thumbW-4] + ".."
+	maxNameLen := innerW - 2
+	if len(name) > maxNameLen {
+		name = name[:maxNameLen-1] + "…"
 	}
 
-	iconH := thumbH - 3
-	iconLines := strings.Repeat("\n", iconH-1)
-	iconArea := lipgloss.NewStyle().
-		Width(thumbW - 3).
-		Align(lipgloss.Center).
-		Foreground(lipgloss.Color(nameColor)).
-		Render(iconLines)
+	var lines []string
+	for i := 0; i < innerH; i++ {
+		lines = append(lines, strings.Repeat(" ", innerW))
+	}
 
-	nameStr := lipgloss.NewStyle().
-		Width(thumbW - 3).
+	lines[innerH-1] = lipgloss.NewStyle().
+		Width(innerW).
+		MaxWidth(innerW).
 		Align(lipgloss.Center).
 		Foreground(lipgloss.Color(nameColor)).
 		Render(name)
 
-	content := lipgloss.JoinVertical(lipgloss.Center, iconArea, nameStr)
+	content := strings.Join(lines, "\n")
+
+	border := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(borderColor))
 
 	return border.Render(content)
 }
@@ -674,6 +1062,6 @@ func getImageDimensions(imagePath string) (int, int) {
 }
 
 const (
-	thumbW = 18
-	thumbH = 10
+	thumbW = 14
+	thumbH = 7
 )

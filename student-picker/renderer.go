@@ -3,11 +3,16 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 )
 
 func getIconPath(studentId int) string {
 	return filepath.Join(os.TempDir(), fmt.Sprintf("sp-icon-%d.webp", studentId))
+}
+
+func getPngIconPath(studentId int) string {
+	return filepath.Join(os.TempDir(), fmt.Sprintf("sp-icon-%d.png", studentId))
 }
 
 func ensureIconCached(studentId int, downloader *Downloader) string {
@@ -21,6 +26,26 @@ func ensureIconCached(studentId int, downloader *Downloader) string {
 		}
 	}
 	return iconPath
+}
+
+func convertWebpToPng(webpPath, pngPath string) error {
+	cmd := exec.Command("magick", webpPath, pngPath)
+	return cmd.Run()
+}
+
+func ensurePngIcon(studentId int, downloader *Downloader, hasMagick bool) string {
+	pngPath := getPngIconPath(studentId)
+	if _, err := os.Stat(pngPath); err == nil {
+		return pngPath
+	}
+
+	webpPath := ensureIconCached(studentId, downloader)
+	if hasMagick {
+		if err := convertWebpToPng(webpPath, pngPath); err == nil {
+			return pngPath
+		}
+	}
+	return webpPath
 }
 
 func getPortraitPath(studentId int) string {

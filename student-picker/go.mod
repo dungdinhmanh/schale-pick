@@ -22,6 +22,7 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/disintegration/imaging v1.6.2 // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
+	github.com/go-go-golems/bobatea v0.1.5 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/gonutz/w32/v2 v2.12.1 // indirect
 	github.com/google/btree v1.1.3 // indirect
@@ -47,6 +48,6 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 	golang.org/x/image v0.28.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 )

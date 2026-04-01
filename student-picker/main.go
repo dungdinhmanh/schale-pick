@@ -27,10 +27,18 @@ func main() {
 }
 
 func cleanupTempFiles() {
-	pattern := filepath.Join(os.TempDir(), "sp-icon-*.webp")
-	matches, _ := filepath.Glob(pattern)
-	for _, f := range matches {
-		os.Remove(f)
+	webpPattern := filepath.Join(os.TempDir(), "sp-icon-*.webp")
+	if matches, _ := filepath.Glob(webpPattern); matches != nil {
+		for _, f := range matches {
+			os.Remove(f)
+		}
+	}
+
+	pngPattern := filepath.Join(os.TempDir(), "sp-icon-*.png")
+	if matches, _ := filepath.Glob(pngPattern); matches != nil {
+		for _, f := range matches {
+			os.Remove(f)
+		}
 	}
 
 	clearImagesTermimg()
