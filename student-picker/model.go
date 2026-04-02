@@ -401,12 +401,13 @@ func (m *model) clampOffset() {
 }
 
 func (m model) visibleRows() int {
-	// Account for: tabs (1), status line (1), help (1), panel borders (2)
-	headerLines := 1 // tabs
-	footerLines := 2 // status + help
-	borderLines := 2 // top + bottom borders of panel
+	masterBorder := 2
+	titleLine := 1
+	headerLine := 1
+	statusLine := 1
+	helpLine := 1
 
-	availableHeight := m.height - headerLines - footerLines - borderLines
+	availableHeight := m.height - masterBorder - titleLine - headerLine - statusLine - helpLine
 
 	rows := availableHeight / thumbH
 	if rows < 1 {
@@ -582,14 +583,22 @@ func (m model) viewMain() string {
 		leftContent = tabsContent + "\n" + gridContent
 	}
 
-	leftPanel := styleGridBorder.Width(gridW).Render(leftContent)
-	rightPanel := stylePreviewBorder.Width(PreviewW).Render(previewContent)
-	body := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, " ", rightPanel)
+	separator := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#45475A")).
+		Render("│")
+
+	body := lipgloss.JoinHorizontal(lipgloss.Top, leftContent, " ", separator, " ", previewContent)
 
 	titleText := fmt.Sprintf(" Browse (%d) / Installed (%d) ", browseCount, installedCount)
-	masterBox := styleMasterBox.Width(m.width - 2).Render(body)
-	titleLine := renderBorderTitle(titleText, m.width-2)
-	masterContent := titleLine + "\n" + masterBox
+	titleStyled := styleTitle.Render(titleText)
+	titleLine := lipgloss.NewStyle().
+		Width(m.width - 4).
+		Align(lipgloss.Center).
+		Foreground(lipgloss.Color("#CBA6F7")).
+		Render(titleStyled)
+
+	masterContent := lipgloss.JoinVertical(lipgloss.Left, titleLine, body)
+	masterBox := styleMasterBox.Width(m.width - 2).Render(masterContent)
 
 	statusLine := ""
 	if m.status != "" {
@@ -607,7 +616,7 @@ func (m model) viewMain() string {
 		help = styleHelp.Render("h/j/k/l: move | /: search | Tab: switch | i: settings | Enter: select | q: quit")
 	}
 
-	mainContent := lipgloss.JoinVertical(lipgloss.Left, masterContent, statusLine, help)
+	mainContent := lipgloss.JoinVertical(lipgloss.Left, masterBox, statusLine, help)
 
 	if m.modal.kind != modalNone {
 		return m.renderModalOverlay(mainContent)
@@ -847,9 +856,8 @@ func (m model) getVisibleIconBatch() tea.Cmd {
 					continue
 				}
 
-				// Calculate position relative to visible area
 				visibleRow := row - m.gridOffset
-				gridX := 2 + col*thumbW
+				gridX := 1 + col*thumbW
 				gridY := 3 + visibleRow*thumbH
 
 				iconW := thumbW - 4
@@ -940,7 +948,7 @@ func (m model) renderKittyImage() tea.Cmd {
 
 		clearImagesTermimg()
 
-		x := m.width - PreviewW - 1
+		x := m.width - PreviewW - 2
 		y := 2
 		w, h := PreviewW-2, PreviewH-2
 
