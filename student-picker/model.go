@@ -118,21 +118,23 @@ type model struct {
 	statusTimer time.Time
 	previewPath string
 	iconPaths   map[int]string
+	iconPending map[int]bool
 	modal       modal
 	hasMagick   bool
 }
 
 func newModel() model {
 	return model{
-		tab:        TabBrowse,
-		gridIdx:    0,
-		gridCols:   5,
-		gridOffset: 0,
-		cache:      NewCache(CacheDir(), DefaultCacheSize),
-		downloader: NewDownloader(5),
-		loading:    true,
-		iconPaths:  make(map[int]string),
-		hasMagick:  checkMagick(),
+		tab:         TabBrowse,
+		gridIdx:     0,
+		gridCols:    5,
+		gridOffset:  0,
+		cache:       NewCache(CacheDir(), DefaultCacheSize),
+		downloader:  NewDownloader(5),
+		loading:     true,
+		iconPaths:   make(map[int]string),
+		iconPending: make(map[int]bool),
+		hasMagick:   checkMagick(),
 	}
 }
 
@@ -167,18 +169,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.previewPath = ensurePortraitCached(m.filtered[0].Id, m.downloader)
 		}
 		m.preCachePortraits()
-		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch())
+		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		// Account for: left border(1) + right border(1) + gap(1) + preview border(1) = 4
-		m.gridCols = (m.width - PreviewW - 4) / thumbW
+		gridW := m.width - PreviewW - 7
+		if gridW < thumbW {
+			gridW = thumbW
+		}
+		m.gridCols = gridW / thumbW
 		if m.gridCols < 2 {
 			m.gridCols = 2
 		}
 		m.clampOffset()
-		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch())
+		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())
 
 	case tea.KeyPressMsg:
 		if m.modal.kind != modalNone {
@@ -197,6 +202,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = ""
 		}
 		return m, nil
+
+	case iconDownloadedMsg:
+		delete(m.iconPending, msg.studentId)
+		if msg.err == nil && msg.iconPath != "" {
+			m.iconPaths[msg.studentId] = msg.iconPath
+		}
+		return m, tea.Batch(m.renderKittyImage(), m.renderVisibleIconsCmd())
 	}
 	return m, nil
 }
@@ -265,14 +277,14 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.gridIdx > 0 {
 			m.gridIdx--
 			m.clampOffset()
-			return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch())
+			return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())
 		}
 
 	case "right", "l":
 		if m.gridIdx < len(m.getCurrentItems())-1 {
 			m.gridIdx++
 			m.clampOffset()
-			return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch())
+			return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())
 		}
 
 	case "up", "k":
@@ -281,7 +293,7 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.gridIdx = 0
 		}
 		m.clampOffset()
-		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch())
+		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())
 
 	case "down", "j":
 		m.gridIdx += m.gridCols
@@ -290,7 +302,7 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.gridIdx = maxIdx
 		}
 		m.clampOffset()
-		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch())
+		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())
 
 	case "/":
 		m.searchMode = true
@@ -568,7 +580,7 @@ func (m model) viewMain() string {
 	browseCount := len(m.filtered)
 	installedCount := len(m.cache.List())
 
-	gridW := m.width - PreviewW - 4
+	gridW := m.width - PreviewW - 7
 	if gridW < thumbW {
 		gridW = thumbW
 	}
@@ -783,7 +795,10 @@ func (m model) renderTabs() string {
 
 func (m model) renderGrid() string {
 	items := m.getCurrentItems()
-	gridW := m.width - PreviewW - 4
+	// Account for: grid area + gap(1) + separator(1) + gap(1) + preview(PreviewW-2)
+	// Content area width = m.width - 6 (master box: border(2) + padding(2))
+	// gridW = contentWidth - 3 - (PreviewW - 2) = m.width - 6 - 3 - PreviewW + 2 = m.width - PreviewW - 7
+	gridW := m.width - PreviewW - 7
 	if gridW < thumbW {
 		gridW = thumbW
 	}
@@ -831,6 +846,49 @@ func (m model) renderGrid() string {
 }
 
 func (m model) getVisibleIconBatch() tea.Cmd {
+	items := m.getCurrentItems()
+	if len(items) == 0 {
+		return nil
+	}
+
+	visibleRows := m.visibleRows()
+	startRow := m.gridOffset
+	endRow := startRow + visibleRows
+
+	var cmds []tea.Cmd
+
+	for row := startRow; row < endRow; row++ {
+		for col := 0; col < m.gridCols; col++ {
+			idx := row*m.gridCols + col
+			if idx >= len(items) {
+				continue
+			}
+
+			student := items[idx]
+			iconPath := getIconPath(student.Id)
+
+			if _, err := os.Stat(iconPath); err == nil {
+				m.iconPaths[student.Id] = iconPath
+				continue
+			}
+
+			if m.iconPending[student.Id] {
+				continue
+			}
+
+			m.iconPending[student.Id] = true
+			cmds = append(cmds, downloadIconCmd(student.Id, m.downloader))
+		}
+	}
+
+	if len(cmds) == 0 {
+		return nil
+	}
+
+	return tea.Batch(cmds...)
+}
+
+func (m model) renderVisibleIconsCmd() tea.Cmd {
 	return func() tea.Msg {
 		clearImagesTermimg()
 
@@ -851,8 +909,8 @@ func (m model) getVisibleIconBatch() tea.Cmd {
 				}
 
 				student := items[idx]
-				iconPath := ensureIconCached(student.Id, m.downloader)
-				if iconPath == "" {
+				iconPath, ok := m.iconPaths[student.Id]
+				if !ok {
 					continue
 				}
 
@@ -860,8 +918,8 @@ func (m model) getVisibleIconBatch() tea.Cmd {
 				gridX := 1 + col*thumbW
 				gridY := 3 + visibleRow*thumbH
 
-				iconW := thumbW - 4
-				iconH := thumbH - 3
+				iconW := thumbW - 2
+				iconH := thumbH - 2
 
 				_ = renderImageTermimg(iconPath, gridX, gridY, iconW, iconH)
 			}
@@ -948,7 +1006,17 @@ func (m model) renderKittyImage() tea.Cmd {
 
 		clearImagesTermimg()
 
-		x := m.width - PreviewW - 2
+		gridW := m.width - PreviewW - 7
+		if gridW < thumbW {
+			gridW = thumbW
+		}
+		gridCols := gridW / thumbW
+		if gridCols < 2 {
+			gridCols = 2
+		}
+		actualGridWidth := gridCols * thumbW
+
+		x := actualGridWidth + 5
 		y := 2
 		w, h := PreviewW-2, PreviewH-2
 
@@ -956,6 +1024,30 @@ func (m model) renderKittyImage() tea.Cmd {
 			return nil
 		}
 		return nil
+	}
+}
+
+func downloadIconCmd(studentId int, downloader *Downloader) tea.Cmd {
+	return func() tea.Msg {
+		iconPath := getIconPath(studentId)
+		if _, err := os.Stat(iconPath); err == nil {
+			return iconDownloadedMsg{studentId: studentId, iconPath: iconPath}
+		}
+
+		if downloader == nil {
+			return iconDownloadedMsg{studentId: studentId, err: fmt.Errorf("no downloader")}
+		}
+
+		data, err := downloader.DownloadIcon(studentId)
+		if err != nil {
+			return iconDownloadedMsg{studentId: studentId, err: err}
+		}
+
+		if err := os.WriteFile(iconPath, data, 0644); err != nil {
+			return iconDownloadedMsg{studentId: studentId, err: err}
+		}
+
+		return iconDownloadedMsg{studentId: studentId, iconPath: iconPath}
 	}
 }
 
@@ -977,6 +1069,12 @@ func filterStudents(students []Student, query string) []Student {
 
 type manifestLoadedMsg struct {
 	students []Student
+}
+
+type iconDownloadedMsg struct {
+	studentId int
+	iconPath  string
+	err       error
 }
 
 func fetchManifestCmd() tea.Msg {
@@ -1070,6 +1168,6 @@ func getImageDimensions(imagePath string) (int, int) {
 }
 
 const (
-	thumbW = 14
-	thumbH = 7
+	thumbW = 12
+	thumbH = 6
 )
