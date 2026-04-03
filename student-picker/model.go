@@ -68,6 +68,8 @@ type model struct {
 	modal         modal
 	hasMagick     bool
 	termType      string
+	settingsIdx   int
+	logoFormat    string // "kitty" or "raw"
 }
 
 func newModel() model {
@@ -82,6 +84,7 @@ func newModel() model {
 		iconPaths:   make(map[int]string),
 		iconPending: make(map[int]bool),
 		termType:    detectTerminalType(),
+		logoFormat:  "kitty",
 	}
 }
 
@@ -142,13 +145,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		gridW := m.width - PreviewW - 7
+		
+		// Reserved space: Master Box border (2) + Padding (2) + Separator (1) + PreviewW (40)
+		gridW := m.width - PreviewW - 5
 		if gridW < thumbW {
 			gridW = thumbW
 		}
 		m.gridCols = gridW / thumbW
-		if m.gridCols < 2 {
-			m.gridCols = 2
+		if m.gridCols < 1 {
+			m.gridCols = 1
 		}
 		m.clampOffset()
 		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())

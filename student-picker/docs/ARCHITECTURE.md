@@ -10,9 +10,11 @@ The project is divided into several modules to separate concerns and ensure high
 ### 2. View Layer (`view.go`, `styles.go`)
 - `view.go`: Implements the `View()` function. It uses a composition of multiple rendering functions:
   - `renderGrid()`: Renders the square icons in the browse list.
-  - `renderPreview()`: Renders the student details and allocates space for the portrait.
+  - `renderPreview()`: Renders student details and portrait space.
   - `renderGridBoxWithTabs()`: Wraps content in a box with custom borders and embedded tabs.
-- `styles.go`: Defines all Lipgloss styles. Using a centralized style file makes it easy to change the theme (e.g., swapping Catppuccin colors).
+  - `viewMain()`: Assembles the Master Box containing the Grid, Preview, Status, and Help.
+  - `viewSettings()`: Implements the new Interactive Settings menu.
+- `styles.go`: Defines all Lipgloss styles, including the new `styleMasterBox` and settings-specific tokens.
 
 ### 3. Controller & Input (`update_keyboard.go`)
 - Handles user inputs (h/j/k/l for navigation, `/` for searching, `Tab` for switching categories).
@@ -20,8 +22,8 @@ The project is divided into several modules to separate concerns and ensure high
 
 ### 4. Image Rendering Strategy (`renderer.go`, `termimg_renderer.go`, `terminal.go`)
 - `terminal.go`: Detects terminal environment (e.g., `Kitty`, `iTerm`, `Sixel`).
-- `renderer.go`: Manages image loading, caching, and conversion.
-- `termimg_renderer.go`: A safety wrapper for the `termimg` library to prevent panics in pseudo-terminal environments.
+- `renderer.go`: Manages image loading and caching.
+- `termimg_renderer.go`: Directly integrates the `termimg` library to render images natively in the terminal. This avoids the overhead of spawning external processes like `icat` for every image, enabling high-performance batch rendering (10-30 images).
 
 ### 5. Data & Networking (`downloader.go`, `url.go`, `config.go`)
 - `downloader.go`: Implements an asynchronous downloader and handles **Offline Meta Mapping** (saving `meta.json` for persistence).

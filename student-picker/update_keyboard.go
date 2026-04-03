@@ -143,10 +143,26 @@ func (m model) handleSettingsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c", "q":
 		return m, tea.Quit
-	case "b", "esc":
+	case "b", "esc", "i":
 		m.screen = screenMain
 		m.status = ""
 		return m, nil
+	case "up", "k":
+		if m.settingsIdx > 0 {
+			m.settingsIdx--
+		}
+	case "down", "j":
+		if m.settingsIdx < 0 { // 0 is currently the only setting
+			m.settingsIdx++
+		}
+	case "left", "right", "h", "l":
+		if m.settingsIdx == 0 {
+			if m.logoFormat == "kitty" {
+				m.logoFormat = "raw"
+			} else {
+				m.logoFormat = "kitty"
+			}
+		}
 	}
 	return m, nil
 }

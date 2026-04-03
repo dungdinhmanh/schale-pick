@@ -6,6 +6,7 @@ import (
 
 	"github.com/srlehn/termimg"
 	_ "github.com/srlehn/termimg/drawers/all"
+	_ "github.com/srlehn/termimg/terminals"
 )
 
 func renderImageTermimg(imagePath string, x, y, w, h int) (err error) {

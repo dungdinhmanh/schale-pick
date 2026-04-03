@@ -20,6 +20,9 @@ func (m model) View() tea.View {
 		mainContent = m.viewMain()
 	}
 
+	// Move down 2px as requested
+	mainContent = "\n\n" + mainContent
+
 	// Overlay modals if active
 	if m.modal.kind != modalNone {
 		var modalView string
@@ -91,87 +94,101 @@ func (m model) viewMain() string {
 	gridContent := m.renderGrid()
 	previewContent := m.renderPreview()
 
-	gridW := m.width - PreviewW - 3
+	// Reserved: Master Border (2) + Padding (2) + Middle Space (1) = 5
+	gridW := m.width - PreviewW - 5
 	if gridW < thumbW {
 		gridW = thumbW
 	}
 
 	leftContent := m.renderGridBoxWithTabs(gridContent, gridW)
 
-	body := lipgloss.JoinHorizontal(lipgloss.Top, leftContent, " ", previewContent)
-
+	upperPart := lipgloss.JoinHorizontal(lipgloss.Top, leftContent, " ", previewContent)
+	
 	statusLine := ""
 	if m.status != "" {
 		if m.statusIsErr {
-			statusLine = styleError.Render("! " + m.status)
+			statusLine = " " + styleError.Render("! "+m.status)
 		} else {
-			statusLine = styleSuccess.Render("✓ " + m.status)
+			statusLine = " " + styleSuccess.Render("✓ "+m.status)
 		}
 	}
 
 	if m.isDownloading {
 		prog := renderProgressBar(m.downloadPct, 30)
-		statusLine = lipgloss.NewStyle().Foreground(lipgloss.Color("#89B4FA")).Render("Downloading: ") + prog
+		statusLine = " " + lipgloss.NewStyle().Foreground(lipgloss.Color("#89B4FA")).Render("Downloading: ") + prog
 	}
 
 	var help string
 	if m.searchMode {
-		help = styleHelp.Render("Type to search... | Enter: confirm | Esc: cancel")
+		help = " " + styleHelp.Render("Type to search... | Enter: confirm | Esc: cancel")
 	} else {
-		help = styleHelp.Render("h/j/k/l: move | /: search | Tab: switch | i: settings | Enter: select | q: quit")
+		help = " " + styleHelp.Render("h/j/k/l: move | /: search | Tab: switch | i: settings | Enter: select | q: quit")
 	}
 
-	mainContent := lipgloss.JoinVertical(lipgloss.Left, body, statusLine, help)
-
-	if m.modal.kind != modalNone {
-		return m.renderModalOverlay(mainContent)
+	// Calculate inner height to make it fill the terminal
+	innerHeight := m.height - 5 // Top offset (2) + Master Border (2) + Some buffer
+	if innerHeight < 10 {
+		innerHeight = 10
 	}
 
-	return mainContent
+	mainCol := lipgloss.JoinVertical(lipgloss.Left, upperPart, statusLine, help)
+	mainCol = lipgloss.NewStyle().Height(innerHeight).Render(mainCol)
+
+	return styleMasterBox.Width(m.width - 2).Render(mainCol)
 }
 
 func (m model) viewSettings() string {
-	cacheDir := CacheDir()
+	var b strings.Builder
+	
+	title := styleTitle.Render(" SETTINGS (Interactive) ")
+	b.WriteString(title + "\n\n")
 
-	cfgLine := lipgloss.Style{}.Foreground(lipgloss.Color("#89B4FA")).Render("Cache: ") +
-		lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(cacheDir)
-
-	cachedItems := m.cache.List()
-	statsLine := lipgloss.Style{}.Foreground(lipgloss.Color("#A6E3A1")).Render("Installed: ") +
-		lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(fmt.Sprintf("%d students", len(cachedItems)))
-
-	magickStatus := "not available"
-	if m.hasMagick {
-		magickStatus = "available"
+	// Setting Item: Fastfetch Logo Format
+	var logoLabel string
+	if m.settingsIdx == 0 {
+		logoLabel = styleSettingSelected.Render("> Fastfetch Logo Format: ")
+	} else {
+		logoLabel = styleSettingNormal.Render("  Fastfetch Logo Format: ")
 	}
-	magickLine := lipgloss.Style{}.Foreground(lipgloss.Color("#CBA6F7")).Render("ImageMagick: ") +
-		lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(magickStatus)
+	b.WriteString(logoLabel)
 
-	termLine := lipgloss.Style{}.Foreground(lipgloss.Color("#89B4FA")).Render("Terminal: ") +
-		lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(m.termType)
-
-	infoBlock := lipgloss.JoinVertical(lipgloss.Left,
-		" "+cfgLine,
-		" "+statsLine,
-		" "+magickLine,
-		" "+termLine,
-	)
-
-	settingsTitleLine := renderBorderTitle(" Settings ", m.width-4)
-	contentBlock := settingsTitleLine + "\n" + styleSettingsBorder.Width(m.width-4).Render("Press 'q', 'b', or 'esc' to go back")
-
-	statusLine := ""
-	if m.status != "" {
-		if m.statusIsErr {
-			statusLine = styleError.Render("! " + m.status)
-		} else {
-			statusLine = styleSuccess.Render("✓ " + m.status)
+	options := []string{"kitty", "raw"}
+	for _, opt := range options {
+		style := styleSettingNormal
+		if m.logoFormat == opt {
+			style = styleSettingSelected.Copy().Background(lipgloss.Color("#FAB387"))
 		}
+		b.WriteString(style.Render(" " + opt + " "))
+		b.WriteString(" ")
 	}
+	b.WriteString("\n\n")
+	
+	// App Info
+	b.WriteString(styleSubTitle.Render(" Application Info "))
+	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf("  Cache Dir:  %s\n", CacheDir()))
+	b.WriteString(fmt.Sprintf("  Terminal:   %s\n", m.termType))
+	if m.hasMagick {
+		b.WriteString("  Magick:     Available\n")
+	}
+	b.WriteString("\n")
 
-	help := styleHelp.Render("q/b/esc: back | q: quit")
+	// Navigation Help
+	b.WriteString(styleSubTitle.Render(" Navigation "))
+	b.WriteString("\n")
+	b.WriteString(styleSettingNormal.Render(" ↑/↓: Select Setting | ←/→: Change Value "))
+	b.WriteString("\n")
+	b.WriteString(styleSettingNormal.Render(" i: Back to Browse "))
 
-	return lipgloss.JoinVertical(lipgloss.Left, "", infoBlock, "", contentBlock, statusLine, "", help)
+	content := b.String()
+	settingsBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#CBA6F7")).
+		Padding(1, 4).
+		Width(m.width - 6).
+		Render(content)
+
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, settingsBox)
 }
 
 func renderBorderTitle(title string, panelWidth int) string {
@@ -279,14 +296,14 @@ func (m model) renderGridBoxWithTabs(content string, gridW int) string {
 
 	targetWidth := gridW + 2
 
-	remaining := targetWidth - tabsLen - 4
+	remaining := targetWidth - tabsLen - 8
 	if remaining < 0 {
 		remaining = 0
 	}
 
 	borderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#45475A"))
 	leftBorder := borderStyle.Render("╭── ")
-	rightBorder := borderStyle.Render(" ─" + strings.Repeat("─", remaining) + "╮")
+	rightBorder := borderStyle.Render(" ─" + strings.Repeat("─", remaining) + "──╮")
 	topLine := leftBorder + tabsText + rightBorder
 
 	bottomLine := borderStyle.Render("╰" + strings.Repeat("─", targetWidth-2) + "╯")
@@ -313,11 +330,11 @@ func (m model) renderTabs() string {
 	installedCount := len(m.getInstalledItems())
 	var browse, installed string
 	if m.tab == TabBrowse {
-		browse = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A6E3A1")).Render("[Browse]")
+		browse = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A6E3A1")).Render(" Browse ")
 		installed = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(fmt.Sprintf(" Installed (%d) ", installedCount))
 	} else {
 		browse = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(" Browse ")
-		installed = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A6E3A1")).Render(fmt.Sprintf("[Installed (%d)]", installedCount))
+		installed = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A6E3A1")).Render(fmt.Sprintf(" Installed (%d) ", installedCount))
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Left, browse, installed)
 }
@@ -423,21 +440,33 @@ func (m model) renderPreview() string {
 			Render("No image")
 	} else {
 		student := items[m.gridIdx]
-		name := student.PersonalName
+		fullName := student.PersonalName
 		if student.FamilyName != "" {
-			name += " " + student.FamilyName
+			fullName += " " + student.FamilyName
 		}
-		content = lipgloss.NewStyle().
-			Width(PreviewW-2).
-			Height(PreviewH-2).
+		
+		imagePlaceholder := lipgloss.NewStyle().
+			Width(PreviewW - 2).
+			Height(PreviewH - 6).
 			Align(lipgloss.Center, lipgloss.Center).
+			Render("") // Termimg will draw over this
+
+		nameTag := lipgloss.NewStyle().
+			Width(PreviewW - 2).
+			Align(lipgloss.Center).
 			Foreground(lipgloss.Color("#A6E3A1")).
-			Render(name)
+			Bold(true).
+			PaddingBottom(2).
+			Render(fullName)
+
+		content = lipgloss.JoinVertical(lipgloss.Center, imagePlaceholder, nameTag)
 	}
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#A6E3A1")).
+		Width(PreviewW).
+		Height(PreviewH).
 		Render(content)
 }
 func renderProgressBar(pct float64, width int) string {

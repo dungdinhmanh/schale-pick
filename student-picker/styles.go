@@ -61,4 +61,19 @@ var (
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("#89B4FA")).
 			Padding(0, 1)
+	
+	styleSubTitle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FAB387")).
+			Bold(true).
+			MarginTop(1)
+
+	styleSettingSelected = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#1E1E2E")).
+				Background(lipgloss.Color("#A6E3A1")).
+				Padding(0, 1).
+				Bold(true)
+
+	styleSettingNormal = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#CDD6F4")).
+				Padding(0, 1)
 )

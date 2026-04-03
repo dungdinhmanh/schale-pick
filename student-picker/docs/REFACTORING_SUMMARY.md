@@ -32,8 +32,11 @@ The original `model.go` (a single file with over 1100 lines) was refactored into
 - Tích hợp `tui-devtools` cho việc debug và kiểm tra giao diện trực quan.
 - Tối ưu hóa dung lượng code (xóa tool check Magick dư thừa, tinh gọn CSS-in-Go logic).
 
-## 5. V5: Advanced Features & Offline Stability (Current)
-- **Offline Meta Mapping**: Implement `meta.json` storage to maintain student names in the `Installed` tab without internet.
-- **Help Modal**: Integrated a Lipgloss-based modal (key `h`) for on-demand keybind reference.
-- **Progress Feedback**: Added a real-time progress bar for portrait downloads, improving perceived performance.
 - **Enhanced Reliability**: Automatic fallback to `raw` logo type for compatibility across all Sixel-capable and standard terminals.
+
+## 6. V6: Master Box Layout & High-Performance Rendering (Latest)
+- **Master Box**: Unified UI container for Grid, Preview, Status, and Help.
+- **termimg Native Driver**: Switched from external `icat` to native Go `termimg` for rendering 10-30 images simultaneously without performance degradation.
+- **Responsive Grid**: Recalculated column logic to fit terminal resizing perfectly.
+- **Interactive Settings**: Transformed static info screen into a navigable settings menu.
+- **UI Alignment**: Fixed top/bottom bar offsets and right-side overflow issues.
