@@ -28,40 +28,14 @@ func (m model) viewMain() string {
 	gridContent := m.renderGrid()
 	previewContent := m.renderPreview()
 
-	browseCount := len(m.filtered)
-	installedCount := len(m.cache.List())
-
-	gridW := m.width - PreviewW - 7
+	gridW := m.width - PreviewW - 3
 	if gridW < thumbW {
 		gridW = thumbW
 	}
 
-	var leftContent string
-	if m.searchMode {
-		searchQuery := m.searchQuery + "█"
-		searchBar := styleSearchBar.Width(gridW - 2).Render(searchQuery)
-		leftContent = searchBar + "\n" + gridContent
-	} else {
-		tabsContent := m.renderTabs()
-		leftContent = tabsContent + "\n" + gridContent
-	}
+	leftContent := m.renderGridBoxWithTabs(gridContent, gridW)
 
-	separator := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#45475A")).
-		Render("│")
-
-	body := lipgloss.JoinHorizontal(lipgloss.Top, leftContent, " ", separator, " ", previewContent)
-
-	titleText := fmt.Sprintf(" Browse (%d) / Installed (%d) ", browseCount, installedCount)
-	titleStyled := styleTitle.Render(titleText)
-	titleLine := lipgloss.NewStyle().
-		Width(m.width - 4).
-		Align(lipgloss.Center).
-		Foreground(lipgloss.Color("#CBA6F7")).
-		Render(titleStyled)
-
-	masterContent := lipgloss.JoinVertical(lipgloss.Left, titleLine, body)
-	masterBox := styleMasterBox.Width(m.width - 2).Render(masterContent)
+	body := lipgloss.JoinHorizontal(lipgloss.Top, leftContent, " ", previewContent)
 
 	statusLine := ""
 	if m.status != "" {
@@ -79,7 +53,7 @@ func (m model) viewMain() string {
 		help = styleHelp.Render("h/j/k/l: move | /: search | Tab: switch | i: settings | Enter: select | q: quit")
 	}
 
-	mainContent := lipgloss.JoinVertical(lipgloss.Left, masterBox, statusLine, help)
+	mainContent := lipgloss.JoinVertical(lipgloss.Left, body, statusLine, help)
 
 	if m.modal.kind != modalNone {
 		return m.renderModalOverlay(mainContent)
@@ -222,6 +196,51 @@ func placeOverlay(x, y int, fg, bg string, shadow bool) string {
 	return result.String()
 }
 
+func (m model) renderGridBoxWithTabs(content string, gridW int) string {
+	var tabsText string
+	if m.searchMode {
+		searchQuery := m.searchQuery + "█"
+		tabsText = lipgloss.JoinHorizontal(lipgloss.Left,
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#89B4FA")).Render(" Search: "),
+			lipgloss.NewStyle().Foreground(lipgloss.Color("#CDD6F4")).Render(searchQuery+" "),
+		)
+	} else {
+		tabsText = m.renderTabs()
+	}
+	tabsLen := lipgloss.Width(tabsText)
+
+	targetWidth := gridW + 2
+
+	remaining := targetWidth - tabsLen - 4
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	borderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#45475A"))
+	leftBorder := borderStyle.Render("╭── ")
+	rightBorder := borderStyle.Render(" ─" + strings.Repeat("─", remaining) + "╮")
+	topLine := leftBorder + tabsText + rightBorder
+
+	bottomLine := borderStyle.Render("╰" + strings.Repeat("─", targetWidth-2) + "╯")
+
+	var bodyLines []string
+	if content != "" {
+		lines := strings.Split(content, "\n")
+		leftEdge := borderStyle.Render("│ ")
+		rightEdge := borderStyle.Render(" │")
+		for _, line := range lines {
+			contentPadded := lipgloss.PlaceHorizontal(targetWidth-4, lipgloss.Left, line)
+			bodyLines = append(bodyLines, leftEdge+contentPadded+rightEdge)
+		}
+	}
+
+	res := []string{topLine}
+	res = append(res, bodyLines...)
+	res = append(res, bottomLine)
+
+	return strings.Join(res, "\n")
+}
+
 func (m model) renderTabs() string {
 	var browse, installed string
 	if m.tab == TabBrowse {
@@ -325,23 +344,30 @@ func (m model) renderGridItem(s Student, selected bool) string {
 
 func (m model) renderPreview() string {
 	items := m.getCurrentItems()
+	
+	var content string
 	if len(items) == 0 || m.gridIdx >= len(items) {
-		return lipgloss.NewStyle().
+		content = lipgloss.NewStyle().
 			Width(PreviewW-2).Height(PreviewH-2).
 			Align(lipgloss.Center, lipgloss.Center).
 			Foreground(lipgloss.Color("#6C7086")).
 			Render("No image")
+	} else {
+		student := items[m.gridIdx]
+		name := student.PersonalName
+		if student.FamilyName != "" {
+			name += " " + student.FamilyName
+		}
+		content = lipgloss.NewStyle().
+			Width(PreviewW-2).
+			Height(PreviewH-2).
+			Align(lipgloss.Center, lipgloss.Center).
+			Foreground(lipgloss.Color("#A6E3A1")).
+			Render(name)
 	}
 
-	student := items[m.gridIdx]
-	name := student.PersonalName
-	if student.FamilyName != "" {
-		name += " " + student.FamilyName
-	}
 	return lipgloss.NewStyle().
-		Width(PreviewW-2).
-		Height(PreviewH-2).
-		Align(lipgloss.Center, lipgloss.Center).
-		Foreground(lipgloss.Color("#A6E3A1")).
-		Render(name)
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#A6E3A1")).
+		Render(content)
 }

@@ -432,8 +432,8 @@ func (m model) renderVisibleIconsCmd() tea.Cmd {
 				}
 
 				visibleRow := row - m.gridOffset
-				gridX := 1 + col*thumbW
-				gridY := 3 + visibleRow*thumbH
+				gridX := 2 + col*thumbW
+				gridY := 1 + visibleRow*thumbH
 
 				iconW := thumbW - 2
 				iconH := thumbH - 2
@@ -460,18 +460,13 @@ func (m model) renderKittyImage() tea.Cmd {
 
 		clearImagesTermimg()
 
-		gridW := m.width - PreviewW - 7
+		gridW := m.width - PreviewW - 3
 		if gridW < thumbW {
 			gridW = thumbW
 		}
-		gridCols := gridW / thumbW
-		if gridCols < 2 {
-			gridCols = 2
-		}
-		actualGridWidth := gridCols * thumbW
 
-		x := actualGridWidth + 5
-		y := 2
+		x := gridW + 4
+		y := 1
 		w, h := PreviewW-2, PreviewH-2
 
 		if err := renderImageTermimg(path, x, y, w, h); err != nil {
