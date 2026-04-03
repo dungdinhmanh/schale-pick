@@ -1,21 +1,34 @@
 package main
 
 import (
+	"fmt"
 	"image"
 
 	"github.com/srlehn/termimg"
 	_ "github.com/srlehn/termimg/drawers/all"
 )
 
-func renderImageTermimg(imagePath string, x, y, w, h int) error {
+func renderImageTermimg(imagePath string, x, y, w, h int) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("termimg paniced: %v", r)
+		}
+	}()
 	bounds := image.Rect(x, y, x+w, y+h)
-	return termimg.DrawFile(imagePath, bounds)
+	err = termimg.DrawFile(imagePath, bounds)
+	return err
 }
 
 func clearImagesTermimg() {
+	defer func() {
+		recover()
+	}()
 	termimg.CleanUp()
 }
 
 func cleanupTermimg() {
+	defer func() {
+		recover()
+	}()
 	termimg.CleanUp()
 }

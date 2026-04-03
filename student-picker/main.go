@@ -9,6 +9,9 @@ import (
 )
 
 func main() {
+	if f, err := tea.LogToFile("/tmp/debug.log", "debug"); err == nil {
+		defer f.Close()
+	}
 	m := newModel()
 	p := tea.NewProgram(m)
 
