@@ -55,7 +55,8 @@ var (
 	styleMasterBox = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("#CBA6F7")).
-			Padding(0, 1)
+			Padding(0, 1).
+			MarginTop(1)
 
 	styleSearchBar = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).

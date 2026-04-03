@@ -68,6 +68,8 @@ type model struct {
 	modal         modal
 	hasMagick     bool
 	termType      string
+	logoFormat    string
+	settingsIdx   int
 }
 
 func newModel() model {
@@ -82,6 +84,7 @@ func newModel() model {
 		iconPaths:   make(map[int]string),
 		iconPending: make(map[int]bool),
 		termType:    detectTerminalType(),
+		logoFormat:  "kitty",
 	}
 }
 
@@ -142,13 +145,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		gridW := m.width - PreviewW - 7
-		if gridW < thumbW {
-			gridW = thumbW
+		gridColsW := m.width - PreviewW - 9
+		if gridColsW < thumbW {
+			gridColsW = thumbW
 		}
-		m.gridCols = gridW / thumbW
-		if m.gridCols < 2 {
-			m.gridCols = 2
+		m.gridCols = gridColsW / thumbW
+		if m.gridCols < 1 {
+			m.gridCols = 1
 		}
 		m.clampOffset()
 		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())
@@ -360,7 +363,7 @@ func (m *model) doCacheAndSelect(studentId int) tea.Cmd {
 				return cacheErrorMsg{err: fmt.Errorf("cache miss after put")}
 			}
 
-			if err := updateFastfetchImage(cached.PortraitPath, m.height, m.termType); err != nil {
+			if err := updateFastfetchImage(cached.PortraitPath, m.height, m.termType, m.logoFormat); err != nil {
 				return cacheErrorMsg{err: err}
 			}
 			return cacheSuccessMsg{studentId: studentId}
@@ -375,7 +378,7 @@ func (m model) selectInstalled(studentId int) tea.Cmd {
 		if !ok {
 			return cacheErrorMsg{err: fmt.Errorf("not in cache")}
 		}
-		if err := updateFastfetchImage(cached.PortraitPath, m.height, m.termType); err != nil {
+		if err := updateFastfetchImage(cached.PortraitPath, m.height, m.termType, m.logoFormat); err != nil {
 			return cacheErrorMsg{err: err}
 		}
 		return cacheSuccessMsg{studentId: studentId}
@@ -468,8 +471,8 @@ func (m model) renderVisibleIconsCmd() tea.Cmd {
 				}
 
 				visibleRow := row - m.gridOffset
-				gridX := 2 + col*thumbW
-				gridY := 1 + visibleRow*thumbH
+				gridX := 3 + col*thumbW
+				gridY := 4 + visibleRow*thumbH
 
 				iconW := thumbW - 2
 				iconH := thumbH - 2
@@ -496,14 +499,17 @@ func (m model) renderKittyImage() tea.Cmd {
 
 		clearImagesTermimg()
 
-		gridW := m.width - PreviewW - 3
-		if gridW < thumbW {
-			gridW = thumbW
+		// Unified gridW calculation: Master Box(4) + Grid Box(2) + Space(1) + PreviewW(40) = 11
+		gridW := m.width - PreviewW - 11
+		if gridW < thumbW+4 {
+			gridW = thumbW + 4
 		}
 
-		x := gridW + 4
-		y := 1
-		w, h := PreviewW-2, PreviewH-2
+		// x offset: MasterBorder(1) + Padding(1) + GridBox(gridW+2) + Space(1) + PreviewBorder(1) = gridW + 6
+		// y offset: MarginTop(1) + MasterBorder(1) + PreviewBorder(1) = 3
+		x := gridW + 6
+		y := 3
+		w, h := PreviewW-2, PreviewH-6 // PreviewH-2 for border, further reduced for name tag
 
 		if err := renderImageTermimg(path, x, y, w, h); err != nil {
 			return nil
@@ -617,7 +623,7 @@ func copyFile(src, dst string) error {
 	return os.WriteFile(dst, data, 0644)
 }
 
-func updateFastfetchImage(imagePath string, termLines int, termType string) error {
+func updateFastfetchImage(imagePath string, termLines int, termType string, logoFormat string) error {
 	configPath := fastfetchConfigPath()
 	bakPath := configPath + backupSuffix
 	if !fileExists(bakPath) && fileExists(configPath) {
@@ -644,7 +650,10 @@ func updateFastfetchImage(imagePath string, termLines int, termType string) erro
 		fastW = maxW
 	}
 
-	imgType := getFastfetchImageType(termType)
+	imgType := logoFormat
+	if imgType == "" {
+		imgType = getFastfetchImageType(termType)
+	}
 
 	cmd := exec.Command("jq",
 		fmt.Sprintf(`.logo.source = "%s" | .logo.type = "%s" | .logo.width = %d`, imagePath, imgType, fastW),
