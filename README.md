@@ -63,9 +63,20 @@ const (
 | Phím | Chức năng |
 |------|-----------|
 | ↑ / ↓ / k / j | Di chuyển danh sách |
+| ← / → / h / l | Di chuyển ngang trong Grid |
 | / | Tìm kiếm theo tên / mã số |
+| Tab | Chuyển đổi Browse / Installed |
+| h | Hiện bảng trợ giúp (Help Modal) |
+| i | Xem thông tin chi tiết / Cài đặt |
 | Enter | Chọn & lưu vào fastfetch config |
 | q / Ctrl+C | Thoát không lưu |
+
+## Tính năng nổi bật
+
+- **Offline Mode**: Tự động lưu cache và mapping thông tin học sinh để dùng khi không có mạng.
+- **2-Pane Layout**: Hiển thị song song Grid danh sách và Preview chân dung học sinh.
+- **Progress Bar**: Theo dõi tiến trình tải ảnh chân dung thời gian thực.
+- **Auto Fallback**: Tự động phát hiện terminal và chọn phương thức render ảnh (Kitty/Sixel/Raw) phù hợp nhất.
 
 ## Fastfetch config mẫu
 

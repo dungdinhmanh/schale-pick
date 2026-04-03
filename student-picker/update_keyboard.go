@@ -52,12 +52,16 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.gridOffset = 0
 		return m, nil
 
-	case "left", "h":
+	case "left":
 		if m.gridIdx > 0 {
 			m.gridIdx--
 			m.clampOffset()
 			return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())
 		}
+
+	case "h":
+		m.modal = modal{kind: modalHelp}
+		return m, nil
 
 	case "right", "l":
 		if m.gridIdx < len(m.getCurrentItems())-1 {

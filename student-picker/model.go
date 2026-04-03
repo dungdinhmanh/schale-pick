@@ -32,6 +32,7 @@ type modalKind int
 const (
 	modalNone modalKind = iota
 	modalBackupConfirm
+	modalHelp
 )
 
 type modal struct {
@@ -55,16 +56,18 @@ type model struct {
 	searchMode  bool
 	cache       *Cache
 	downloader  *Downloader
-	loading     bool
-	status      string
-	statusIsErr bool
-	statusTimer time.Time
-	previewPath string
-	iconPaths   map[int]string
-	iconPending map[int]bool
-	modal       modal
-	hasMagick   bool
-	termType    string
+	loading       bool
+	isDownloading bool
+	downloadPct   float64
+	status        string
+	statusIsErr   bool
+	statusTimer   time.Time
+	previewPath   string
+	iconPaths     map[int]string
+	iconPending   map[int]bool
+	modal         modal
+	hasMagick     bool
+	termType      string
 }
 
 func newModel() model {
@@ -99,8 +102,25 @@ type magickCheckMsg struct {
 	available bool
 }
 
+type downloadProgressMsg float64
+
+func tickDownload() tea.Cmd {
+	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
+		return downloadProgressMsg(0.1)
+	})
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case downloadProgressMsg:
+		if m.isDownloading {
+			m.downloadPct += float64(msg)
+			if m.downloadPct > 0.95 {
+				m.downloadPct = 0.95 // Giữ ở 95% cho đến khi xong thực tế
+			}
+			return m, tickDownload()
+		}
+		return m, nil
 	case magickCheckMsg:
 		m.hasMagick = msg.available
 		return m, nil
@@ -110,9 +130,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.filtered = msg.students
 		m.loading = false
 		if len(m.filtered) > 0 {
-			m.previewPath = ensurePortraitCached(m.filtered[0].Id, m.downloader)
+			m.previewPath = getPortraitPath(m.filtered[0].Id)
+			// Save meta for offline use only if we got fresh data
+			if len(m.manifest) > 0 {
+				SaveMeta(m.manifest)
+			}
 		}
-		m.preCachePortraits()
+		go m.preCachePortraits()
 		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())
 
 	case tea.WindowSizeMsg:
@@ -146,12 +170,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case cacheSuccessMsg:
+		m.isDownloading = false
+		m.downloadPct = 1.0
 		m.status = fmt.Sprintf("Selected student %d", msg.studentId)
 		m.statusIsErr = false
 		m.statusTimer = time.Now().Add(3 * time.Second)
 		return m, statusClearCmd()
 
 	case cacheErrorMsg:
+		m.isDownloading = false
 		m.status = msg.err.Error()
 		m.statusIsErr = true
 		m.statusTimer = time.Now().Add(3 * time.Second)
@@ -234,10 +261,7 @@ func (m model) visibleRows() int {
 	return rows
 }
 
-func (m *model) getCurrentItems() []Student {
-	if m.tab == TabBrowse {
-		return m.filtered
-	}
+func (m model) getInstalledItems() []Student {
 	cached := m.cache.List()
 	result := make([]Student, 0, len(cached))
 	for _, c := range cached {
@@ -249,6 +273,13 @@ func (m *model) getCurrentItems() []Student {
 		}
 	}
 	return result
+}
+
+func (m model) getCurrentItems() []Student {
+	if m.tab == TabBrowse {
+		return m.filtered
+	}
+	return m.getInstalledItems()
 }
 
 func (m *model) applyFilter() {
@@ -309,28 +340,33 @@ func (m model) cacheAndSelectWithBackup(studentId int) tea.Cmd {
 	}
 }
 
-func (m model) doCacheAndSelect(studentId int) tea.Cmd {
-	return func() tea.Msg {
-		iconData, err := m.downloader.DownloadIcon(studentId)
-		if err != nil {
-			return cacheErrorMsg{err: err}
-		}
-		portraitData, err := m.downloader.DownloadPortrait(studentId)
-		if err != nil {
-			return cacheErrorMsg{err: err}
-		}
-		m.cache.Put(studentId, iconData, portraitData)
+func (m *model) doCacheAndSelect(studentId int) tea.Cmd {
+	m.isDownloading = true
+	m.downloadPct = 0
+	return tea.Batch(
+		func() tea.Msg {
+			iconData, err := m.downloader.DownloadIcon(studentId)
+			if err != nil {
+				return cacheErrorMsg{err: err}
+			}
+			portraitData, err := m.downloader.DownloadPortrait(studentId)
+			if err != nil {
+				return cacheErrorMsg{err: err}
+			}
+			m.cache.Put(studentId, iconData, portraitData)
 
-		cached, ok := m.cache.Get(studentId)
-		if !ok {
-			return cacheErrorMsg{err: fmt.Errorf("cache miss after put")}
-		}
+			cached, ok := m.cache.Get(studentId)
+			if !ok {
+				return cacheErrorMsg{err: fmt.Errorf("cache miss after put")}
+			}
 
-		if err := updateFastfetchImage(cached.PortraitPath, m.height, m.termType); err != nil {
-			return cacheErrorMsg{err: err}
-		}
-		return cacheSuccessMsg{studentId: studentId}
-	}
+			if err := updateFastfetchImage(cached.PortraitPath, m.height, m.termType); err != nil {
+				return cacheErrorMsg{err: err}
+			}
+			return cacheSuccessMsg{studentId: studentId}
+		},
+		tickDownload(),
+	)
 }
 
 func (m model) selectInstalled(studentId int) tea.Cmd {
@@ -531,7 +567,12 @@ type iconDownloadedMsg struct {
 func fetchManifestCmd() tea.Msg {
 	data, err := FetchManifest()
 	if err != nil {
-		return manifestLoadedMsg{students: []Student{}}
+		// Fallback to offline meta
+		students, err := LoadMeta()
+		if err != nil {
+			return manifestLoadedMsg{students: []Student{}}
+		}
+		return manifestLoadedMsg{students: students}
 	}
 	students, err := parseManifest(data)
 	if err != nil {

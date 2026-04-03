@@ -12,16 +12,79 @@ func (m model) View() tea.View {
 	if m.loading {
 		return tea.NewView("Loading student manifest...")
 	}
-	var content string
+
+	var mainContent string
 	if m.screen == screenSettings {
-		content = m.viewSettings()
+		mainContent = m.viewSettings()
 	} else {
-		content = m.viewMain()
+		mainContent = m.viewMain()
 	}
-	v := tea.NewView(content)
+
+	// Overlay modals if active
+	if m.modal.kind != modalNone {
+		var modalView string
+		if m.modal.kind == modalHelp {
+			modalView = m.renderHelpModal()
+		} else {
+			modalView = m.renderModal()
+		}
+		mainContent = m.overlayModal(mainContent, modalView)
+	}
+
+	v := tea.NewView(mainContent)
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	return v
+}
+
+func (m model) overlayModal(base, modal string) string {
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal, lipgloss.WithWhitespaceChars(base))
+}
+
+func (m model) renderModal() string {
+	btnOk := styleBtnInactive.Render(" Yes (Enter) ")
+	btnCancel := styleBtnInactive.Render(" No (Esc) ")
+
+	if m.modal.activeBtn == 0 {
+		btnOk = styleBtnActive.Render(" Yes (Enter) ")
+	} else {
+		btnCancel = styleBtnActive.Render(" No (Esc) ")
+	}
+
+	buttons := lipgloss.JoinHorizontal(lipgloss.Center, btnOk, "  ", btnCancel)
+	content := lipgloss.JoinVertical(lipgloss.Center,
+		lipgloss.NewStyle().Width(40).Align(lipgloss.Center).Render(m.modal.message),
+		"",
+		buttons,
+	)
+
+	return styleModalBorder.Render(content)
+}
+
+func (m model) renderHelpModal() string {
+	style := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#89B4FA")).
+		Padding(1, 2).
+		Background(lipgloss.Color("#1E1E2E"))
+
+	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#F38BA8")).Render("HELP & KEYBINDS")
+	content := []string{
+		title,
+		"",
+		"↑/↓/←/→ : Navigate grid",
+		"Enter   : Select & set as Fastfetch logo",
+		"Tab     : Switch between Browse/Installed",
+		"/       : Search students",
+		"i       : Open Settings",
+		"h       : Show this Help",
+		"q/Ctrl+C: Quit",
+		"Esc     : Back / Cancel",
+		"",
+		lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("#6C7086")).Render("Press any key to close"),
+	}
+
+	return style.Render(strings.Join(content, "\n"))
 }
 
 func (m model) viewMain() string {
@@ -44,6 +107,11 @@ func (m model) viewMain() string {
 		} else {
 			statusLine = styleSuccess.Render("✓ " + m.status)
 		}
+	}
+
+	if m.isDownloading {
+		prog := renderProgressBar(m.downloadPct, 30)
+		statusLine = lipgloss.NewStyle().Foreground(lipgloss.Color("#89B4FA")).Render("Downloading: ") + prog
 	}
 
 	var help string
@@ -242,13 +310,14 @@ func (m model) renderGridBoxWithTabs(content string, gridW int) string {
 }
 
 func (m model) renderTabs() string {
+	installedCount := len(m.getInstalledItems())
 	var browse, installed string
 	if m.tab == TabBrowse {
 		browse = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A6E3A1")).Render("[Browse]")
-		installed = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(" Installed ")
+		installed = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(fmt.Sprintf(" Installed (%d) ", installedCount))
 	} else {
 		browse = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(" Browse ")
-		installed = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A6E3A1")).Render("[Installed]")
+		installed = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A6E3A1")).Render(fmt.Sprintf("[Installed (%d)]", installedCount))
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Left, browse, installed)
 }
@@ -370,4 +439,19 @@ func (m model) renderPreview() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#A6E3A1")).
 		Render(content)
+}
+func renderProgressBar(pct float64, width int) string {
+	if pct > 1.0 {
+		pct = 1.0
+	}
+	filledW := int(float64(width) * pct)
+	if filledW < 0 {
+		filledW = 0
+	}
+	emptyW := width - filledW
+
+	filled := lipgloss.NewStyle().Foreground(lipgloss.Color("#A6E3A1")).Render(strings.Repeat("█", filledW))
+	empty := lipgloss.NewStyle().Foreground(lipgloss.Color("#45475A")).Render(strings.Repeat("░", emptyW))
+
+	return fmt.Sprintf("[%s%s] %d%%", filled, empty, int(pct*100))
 }

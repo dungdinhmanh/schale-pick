@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -64,4 +68,41 @@ func (d *Downloader) DownloadPortrait(id int) ([]byte, error) {
 // DownloadIcon downloads an icon image for a student
 func (d *Downloader) DownloadIcon(id int) ([]byte, error) {
 	return d.DownloadImage(GetStudentIconURL(id))
+}
+
+// SaveMeta saves a lightweight mapping of ID to Name for offline use
+func SaveMeta(students []Student) error {
+	meta := make(map[int]string)
+	for _, s := range students {
+		meta[s.Id] = s.FamilyName + " " + s.PersonalName
+	}
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(CacheDir(), "meta.json")
+	os.MkdirAll(filepath.Dir(path), 0755)
+	return os.WriteFile(path, data, 0644)
+}
+
+// LoadMeta loads the lightweight mapping from cache
+func LoadMeta() ([]Student, error) {
+	path := filepath.Join(CacheDir(), "meta.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var meta map[int]string
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, err
+	}
+	students := make([]Student, 0, len(meta))
+	for id, name := range meta {
+		names := strings.SplitN(name, " ", 2)
+		fam, pers := "", ""
+		if len(names) > 0 { fam = names[0] }
+		if len(names) > 1 { pers = names[1] }
+		students = append(students, Student{Id: id, FamilyName: fam, PersonalName: pers})
+	}
+	return students, nil
 }

@@ -31,3 +31,9 @@ The original `model.go` (a single file with over 1100 lines) was refactored into
 ## 4. Maintenance
 - Tích hợp `tui-devtools` cho việc debug và kiểm tra giao diện trực quan.
 - Tối ưu hóa dung lượng code (xóa tool check Magick dư thừa, tinh gọn CSS-in-Go logic).
+
+## 5. V5: Advanced Features & Offline Stability (Current)
+- **Offline Meta Mapping**: Implement `meta.json` storage to maintain student names in the `Installed` tab without internet.
+- **Help Modal**: Integrated a Lipgloss-based modal (key `h`) for on-demand keybind reference.
+- **Progress Feedback**: Added a real-time progress bar for portrait downloads, improving perceived performance.
+- **Enhanced Reliability**: Automatic fallback to `raw` logo type for compatibility across all Sixel-capable and standard terminals.

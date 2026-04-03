@@ -24,10 +24,11 @@ The project is divided into several modules to separate concerns and ensure high
 - `termimg_renderer.go`: A safety wrapper for the `termimg` library to prevent panics in pseudo-terminal environments.
 
 ### 5. Data & Networking (`downloader.go`, `url.go`, `config.go`)
-- `downloader.go`: Implements an asynchronous downloader with a semaphore to limit concurrent HTTP requests.
+- `downloader.go`: Implements an asynchronous downloader and handles **Offline Meta Mapping** (saving `meta.json` for persistence).
 - `url.go` & `config.go`: Stores API endpoints and schema definitions.
 
 ## Design Patterns
 - **The Elm Architecture (TEA)**: Followed strictly with Model, Update, View.
-- **Asynchronous Updates**: Heavy tasks (pre-caching, downloading) are performed as `tea.Cmd` to keep the UI frame rate high (60fps target).
-- **Graceful Fallback**: The app detects terminal capabilities and falls back to Sixel or simpler rendering if advanced graphics aren't supported.
+- **Asynchronous Updates**: Heavy tasks (pre-caching, downloading) are performed as `tea.Cmd`.
+- **Offline Capability**: The app creates a lightweight `meta.json` mapping (ID -> Name) in the cache directory, allowing the `Installed` tab to function perfectly without an internet connection.
+- **Graceful Fallback**: The app detects terminal capabilities and falls back to Sixel or raw binary rendering if Kitty isn't supported.
