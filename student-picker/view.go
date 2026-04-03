@@ -307,7 +307,7 @@ func (m model) renderGridBoxWithTabs(content string, gridW int) string {
 
 	targetWidth := gridW + 2
 
-	remaining := targetWidth - tabsLen - 4
+	remaining := targetWidth - tabsLen - 7
 	if remaining < 0 {
 		remaining = 0
 	}
@@ -341,11 +341,11 @@ func (m model) renderTabs() string {
 	installedCount := len(m.getInstalledItems())
 	var browse, installed string
 	if m.tab == TabBrowse {
-		browse = lipgloss.NewStyle().Bold(true).Underline(true).Foreground(lipgloss.Color("#A6E3A1")).Render(" Browse ")
+		browse = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A6E3A1")).Render(" Browse ")
 		installed = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(fmt.Sprintf(" Installed (%d) ", installedCount))
 	} else {
 		browse = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(" Browse ")
-		installed = lipgloss.NewStyle().Bold(true).Underline(true).Foreground(lipgloss.Color("#A6E3A1")).Render(fmt.Sprintf(" Installed (%d) ", installedCount))
+		installed = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#A6E3A1")).Render(fmt.Sprintf(" Installed (%d) ", installedCount))
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Left, browse, installed)
 }

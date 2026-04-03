@@ -175,7 +175,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case cacheSuccessMsg:
 		m.isDownloading = false
 		m.downloadPct = 1.0
-		m.status = fmt.Sprintf("Selected student %d", msg.studentId)
+		m.status = fmt.Sprintf("Selected: %s", msg.name)
 		m.statusIsErr = false
 		m.statusTimer = time.Now().Add(3 * time.Second)
 		return m, statusClearCmd()
@@ -381,8 +381,18 @@ func (m model) selectInstalled(studentId int) tea.Cmd {
 		if err := updateFastfetchImage(cached.PortraitPath, m.height, m.termType, m.logoFormat); err != nil {
 			return cacheErrorMsg{err: err}
 		}
-		return cacheSuccessMsg{studentId: studentId}
+		student, _ := m.getStudent(studentId)
+		return cacheSuccessMsg{studentId: studentId, name: student.PersonalName}
 	}
+}
+
+func (m model) getStudent(id int) (Student, bool) {
+	for _, s := range m.manifest {
+		if s.Id == id {
+			return s, true
+		}
+	}
+	return Student{}, false
 }
 
 type cacheErrorMsg struct {
@@ -391,6 +401,7 @@ type cacheErrorMsg struct {
 
 type cacheSuccessMsg struct {
 	studentId int
+	name      string
 }
 
 type showModalMsg struct {
