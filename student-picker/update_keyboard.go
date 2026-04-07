@@ -56,7 +56,7 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.gridIdx > 0 {
 			m.gridIdx--
 			m.clampOffset()
-			return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())
+			return m, tea.Batch(m.renderAllImagesCmd(), m.getVisibleIconBatch())
 		}
 
 	case "h":
@@ -67,7 +67,7 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.gridIdx < len(m.getCurrentItems())-1 {
 			m.gridIdx++
 			m.clampOffset()
-			return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())
+			return m, tea.Batch(m.renderAllImagesCmd(), m.getVisibleIconBatch())
 		}
 
 	case "up", "k":
@@ -76,7 +76,7 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.gridIdx = 0
 		}
 		m.clampOffset()
-		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())
+		return m, tea.Batch(m.renderAllImagesCmd(), m.getVisibleIconBatch())
 
 	case "down", "j":
 		m.gridIdx += m.gridCols
@@ -85,7 +85,7 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.gridIdx = maxIdx
 		}
 		m.clampOffset()
-		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())
+		return m, tea.Batch(m.renderAllImagesCmd(), m.getVisibleIconBatch())
 
 	case "/":
 		m.searchMode = true

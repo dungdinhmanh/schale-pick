@@ -43,19 +43,19 @@ type modal struct {
 }
 
 type model struct {
-	width       int
-	height      int
-	screen      screen
-	tab         Tab
-	manifest    []Student
-	filtered    []Student
-	gridIdx     int
-	gridCols    int
-	gridOffset  int
-	searchQuery string
-	searchMode  bool
-	cache       *Cache
-	downloader  *Downloader
+	width         int
+	height        int
+	screen        screen
+	tab           Tab
+	manifest      []Student
+	filtered      []Student
+	gridIdx       int
+	gridCols      int
+	gridOffset    int
+	searchQuery   string
+	searchMode    bool
+	cache         *Cache
+	downloader    *Downloader
 	loading       bool
 	isDownloading bool
 	downloadPct   float64
@@ -94,8 +94,18 @@ func checkMagick() bool {
 }
 
 func (m model) Init() tea.Cmd {
-	return tea.Batch(fetchManifestCmd, checkMagickCmd)
+	return tea.Batch(fetchManifestCmd, checkMagickCmd, initTermimgCmd)
 }
+
+func initTermimgCmd() tea.Msg {
+	if err := InitTerminal(); err != nil {
+		return termimgInitErrorMsg{err: err}
+	}
+	return termimgInitSuccessMsg{}
+}
+
+type termimgInitSuccessMsg struct{}
+type termimgInitErrorMsg struct{ err error }
 
 func checkMagickCmd() tea.Msg {
 	return magickCheckMsg{available: checkMagick()}
@@ -128,6 +138,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.hasMagick = msg.available
 		return m, nil
 
+	case termimgInitErrorMsg:
+		m.status = fmt.Sprintf("termimg init: %v", msg.err)
+		m.statusIsErr = true
+		return m, nil
+
 	case manifestLoadedMsg:
 		m.manifest = msg.students
 		m.filtered = msg.students
@@ -140,7 +155,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		go m.preCachePortraits()
-		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())
+		return m, tea.Batch(m.renderAllImagesCmd(), m.getVisibleIconBatch())
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -154,9 +169,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.gridCols = 1
 		}
 		m.clampOffset()
-		return m, tea.Batch(m.renderKittyImage(), m.getVisibleIconBatch(), m.renderVisibleIconsCmd())
+		return m, tea.Batch(m.renderAllImagesCmd(), m.getVisibleIconBatch())
 
 	case tea.KeyPressMsg:
+		// Skip repeat key events to prevent spamming
+		if msg.Key().IsRepeat {
+			return m, nil
+		}
+
 		if m.modal.kind != modalNone {
 			return m.handleModalKey(msg)
 		}
@@ -198,7 +218,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil && msg.iconPath != "" {
 			m.iconPaths[msg.studentId] = msg.iconPath
 		}
-		return m, tea.Batch(m.renderKittyImage(), m.renderVisibleIconsCmd())
+		return m, m.renderAllImagesCmd()
 	}
 	return m, nil
 }
@@ -455,7 +475,7 @@ func (m model) getVisibleIconBatch() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func (m model) renderVisibleIconsCmd() tea.Cmd {
+func (m model) renderAllImagesCmd() tea.Cmd {
 	return func() tea.Msg {
 		clearImagesTermimg()
 
@@ -483,21 +503,17 @@ func (m model) renderVisibleIconsCmd() tea.Cmd {
 
 				visibleRow := row - m.gridOffset
 				gridX := 3 + col*thumbW
-				gridY := 4 + visibleRow*thumbH
+				gridCellY := 3 + visibleRow*thumbH
 
+				// Icon draws inside cell, skip top border
+				iconY := gridCellY + 1
 				iconW := thumbW - 2
-				iconH := thumbH - 2
+				iconH := thumbH - 3
 
-				_ = renderImageTermimg(iconPath, gridX, gridY, iconW, iconH)
+				_ = renderImageTermimg(iconPath, gridX, iconY, iconW, iconH)
 			}
 		}
-		return nil
-	}
-}
 
-func (m model) renderKittyImage() tea.Cmd {
-	return func() tea.Msg {
-		items := m.getCurrentItems()
 		if m.gridIdx < 0 || m.gridIdx >= len(items) {
 			return nil
 		}
@@ -508,23 +524,16 @@ func (m model) renderKittyImage() tea.Cmd {
 			return nil
 		}
 
-		clearImagesTermimg()
-
-		// Unified gridW calculation: Master Box(4) + Grid Box(2) + Space(1) + PreviewW(40) = 11
-		gridW := m.width - PreviewW - 11
+		gridW := m.width - PreviewW - 9
 		if gridW < thumbW+4 {
 			gridW = thumbW + 4
 		}
 
-		// x offset: MasterBorder(1) + Padding(1) + GridBox(gridW+2) + Space(1) + PreviewBorder(1) = gridW + 6
-		// y offset: MarginTop(1) + MasterBorder(1) + PreviewBorder(1) = 3
 		x := gridW + 6
 		y := 3
-		w, h := PreviewW-2, PreviewH-6 // PreviewH-2 for border, further reduced for name tag
+		w, h := PreviewW-2, PreviewH-6
 
-		if err := renderImageTermimg(path, x, y, w, h); err != nil {
-			return nil
-		}
+		_ = renderImageTermimg(path, x, y, w, h)
 		return nil
 	}
 }
@@ -691,5 +700,3 @@ func getImageDimensions(imagePath string) (int, int) {
 	}
 	return w, h
 }
-
-

@@ -15,6 +15,12 @@ func main() {
 	m := newModel()
 	p := tea.NewProgram(m)
 
+	defer func() {
+		clearImagesTermimg()
+		cleanupTermimg()
+		cleanupTempFiles()
+	}()
+
 	finalModel, err := p.Run()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -25,8 +31,6 @@ func main() {
 	if fm.status != "" && !fm.statusIsErr {
 		fmt.Println(fm.status)
 	}
-
-	cleanupTempFiles()
 }
 
 func cleanupTempFiles() {
@@ -43,7 +47,4 @@ func cleanupTempFiles() {
 			os.Remove(f)
 		}
 	}
-
-	clearImagesTermimg()
-	cleanupTermimg()
 }
