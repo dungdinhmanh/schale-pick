@@ -137,7 +137,7 @@ func TestRenderImageTermimg(t *testing.T) {
 	f.Close()
 
 	// Test rendering
-	err = renderImageTermimg(imgPath, 0, 0, 10, 10)
+	err = renderImageTermimg(imgPath, 0, 0, 10, 10, false)
 	if err == nil {
 		t.Log("renderImageTermimg succeeded")
 	} else {
@@ -148,7 +148,7 @@ func TestRenderImageTermimg(t *testing.T) {
 // TestRenderImageTermimgPanic tests panic recovery
 func TestRenderImageTermimgPanic(t *testing.T) {
 	// Test with non-existent file - should not panic
-	err := renderImageTermimg("/nonexistent/image.webp", 0, 0, 10, 10)
+	err := renderImageTermimg("/nonexistent/image.webp", 0, 0, 10, 10, false)
 	if err == nil {
 		t.Log("renderImageTermimg handled non-existent file")
 	} else {

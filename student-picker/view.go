@@ -127,7 +127,7 @@ func (m model) viewMain() string {
 
 	// Join everything vertically inside the Master Box
 	mainCol := lipgloss.JoinVertical(lipgloss.Left, body, statusLine, help)
-	
+
 	return styleMasterBox.Render(mainCol)
 }
 
@@ -163,7 +163,7 @@ func (m model) viewSettings() string {
 	logoLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("#CDD6F4")).Render("Logo Format: ")
 	kittyOption := "kitty"
 	rawOption := "raw"
-	
+
 	if m.logoFormat == "kitty" {
 		kittyOption = lipgloss.NewStyle().Foreground(lipgloss.Color("#A6E3A1")).Bold(true).Render("[kitty]")
 		rawOption = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(" raw ")
@@ -171,7 +171,7 @@ func (m model) viewSettings() string {
 		kittyOption = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(" kitty ")
 		rawOption = lipgloss.NewStyle().Foreground(lipgloss.Color("#A6E3A1")).Bold(true).Render("[raw]")
 	}
-	
+
 	logoFormatRow = lipgloss.JoinHorizontal(lipgloss.Left, logoLabel, kittyOption, " ", rawOption)
 	if m.settingsIdx == 0 {
 		logoFormatRow = lipgloss.NewStyle().Background(lipgloss.Color("#45475A")).Render(" > " + logoFormatRow)
@@ -352,7 +352,7 @@ func (m model) renderTabs() string {
 
 func (m model) renderGrid() string {
 	items := m.getCurrentItems()
-	
+
 	// gridW must be the inner content width
 	gridW := m.width - PreviewW - 9
 	if gridW < thumbW {
@@ -443,7 +443,7 @@ func (m model) renderGridItem(s Student, selected bool) string {
 
 func (m model) renderPreview() string {
 	items := m.getCurrentItems()
-	
+
 	var content string
 	if len(items) == 0 || m.gridIdx >= len(items) {
 		content = lipgloss.NewStyle().
@@ -457,22 +457,25 @@ func (m model) renderPreview() string {
 		if student.FamilyName != "" {
 			fullName += " " + student.FamilyName
 		}
-		
+
 		imagePlaceholder := lipgloss.NewStyle().
-			Width(PreviewW - 2).
-			Height(PreviewH - 6).
+			Width(PreviewW-2).
+			Height(PreviewH-7).
 			Align(lipgloss.Center, lipgloss.Center).
-			Render("") // Termimg will draw over this
+			Render("")
+
+		spacer := lipgloss.NewStyle().
+			Height(1).
+			Render("")
 
 		nameTag := lipgloss.NewStyle().
 			Width(PreviewW - 2).
 			Align(lipgloss.Center).
 			Foreground(lipgloss.Color("#A6E3A1")).
 			Bold(true).
-			PaddingBottom(2).
 			Render(fullName)
 
-		content = lipgloss.JoinVertical(lipgloss.Center, imagePlaceholder, nameTag)
+		content = lipgloss.JoinVertical(lipgloss.Center, imagePlaceholder, spacer, nameTag)
 	}
 
 	return lipgloss.NewStyle().

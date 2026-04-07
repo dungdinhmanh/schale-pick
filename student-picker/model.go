@@ -320,16 +320,30 @@ func (m *model) applyFilter() {
 }
 
 func (m *model) preCachePortraits() {
-	visibleCount := m.gridCols * 3
-
 	items := m.getCurrentItems()
 	count := len(items)
 	if count == 0 {
 		return
 	}
 
-	for i := 0; i < count && i < visibleCount; i++ {
+	iconCount := 20
+	if iconCount > count {
+		iconCount = count
+	}
+
+	for i := 0; i < iconCount; i++ {
 		studentId := items[i].Id
+		iconPath := getIconPath(studentId)
+		if _, err := os.Stat(iconPath); err != nil {
+			data, err := m.downloader.DownloadIcon(studentId)
+			if err == nil {
+				os.WriteFile(iconPath, data, 0644)
+			}
+		}
+	}
+
+	if m.gridIdx < count {
+		studentId := items[m.gridIdx].Id
 		data, err := m.downloader.DownloadPortrait(studentId)
 		if err == nil {
 			portraitPath := filepath.Join(CacheDir(), "portrait", strconv.Itoa(studentId)+".webp")
@@ -503,14 +517,14 @@ func (m model) renderImages() {
 			}
 
 			visibleRow := row - m.gridOffset
-			gridX := 3 + col*thumbW
+			gridX := 2 + col*thumbW + 1
 			gridCellY := 3 + visibleRow*thumbH
 
 			iconY := gridCellY + 1
-			iconW := thumbW - 2
+			iconW := thumbW - 4
 			iconH := thumbH - 3
 
-			_ = renderImageTermimg(iconPath, gridX, iconY, iconW, iconH)
+			_ = renderImageTermimg(iconPath, gridX, iconY, iconW, iconH, true)
 		}
 	}
 
@@ -531,9 +545,9 @@ func (m model) renderImages() {
 
 	x := gridW + 6
 	y := 3
-	w, h := PreviewW-2, PreviewH-6
+	w, h := PreviewW-2, PreviewH-7
 
-	_ = renderImageTermimg(path, x, y, w, h)
+	_ = renderImageTermimg(path, x, y, w, h, true)
 }
 
 func (m model) scheduleRenderCmd() tea.Cmd {

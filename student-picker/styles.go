@@ -4,7 +4,7 @@ import "charm.land/lipgloss/v2"
 
 const (
 	thumbW = 12
-	thumbH = 6
+	thumbH = 7
 )
 
 var (
