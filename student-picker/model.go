@@ -155,7 +155,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		go m.preCachePortraits()
-		return m, tea.Batch(m.renderAllImagesCmd(), m.getVisibleIconBatch())
+		return m, m.scheduleRenderCmd()
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -169,7 +169,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.gridCols = 1
 		}
 		m.clampOffset()
-		return m, tea.Batch(m.renderAllImagesCmd(), m.getVisibleIconBatch())
+		return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
 
 	case tea.KeyPressMsg:
 		// Skip repeat key events to prevent spamming
@@ -218,7 +218,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil && msg.iconPath != "" {
 			m.iconPaths[msg.studentId] = msg.iconPath
 		}
-		return m, m.renderAllImagesCmd()
+		return m, m.scheduleRenderCmd()
+
+	case renderImagesMsg:
+		m.renderImages()
+		return m, nil
 	}
 	return m, nil
 }
@@ -475,68 +479,70 @@ func (m model) getVisibleIconBatch() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func (m model) renderAllImagesCmd() tea.Cmd {
-	return func() tea.Msg {
-		clearImagesTermimg()
-
-		items := m.getCurrentItems()
-		if len(items) == 0 {
-			return nil
-		}
-
-		visibleRows := m.visibleRows()
-		startRow := m.gridOffset
-		endRow := startRow + visibleRows
-
-		for row := startRow; row < endRow; row++ {
-			for col := 0; col < m.gridCols; col++ {
-				idx := row*m.gridCols + col
-				if idx >= len(items) {
-					continue
-				}
-
-				student := items[idx]
-				iconPath, ok := m.iconPaths[student.Id]
-				if !ok {
-					continue
-				}
-
-				visibleRow := row - m.gridOffset
-				gridX := 3 + col*thumbW
-				gridCellY := 3 + visibleRow*thumbH
-
-				// Icon draws inside cell, skip top border
-				iconY := gridCellY + 1
-				iconW := thumbW - 2
-				iconH := thumbH - 3
-
-				_ = renderImageTermimg(iconPath, gridX, iconY, iconW, iconH)
-			}
-		}
-
-		if m.gridIdx < 0 || m.gridIdx >= len(items) {
-			return nil
-		}
-
-		student := items[m.gridIdx]
-		path := ensurePortraitCached(student.Id, m.downloader)
-		if path == "" {
-			return nil
-		}
-
-		gridW := m.width - PreviewW - 9
-		if gridW < thumbW+4 {
-			gridW = thumbW + 4
-		}
-
-		x := gridW + 6
-		y := 3
-		w, h := PreviewW-2, PreviewH-6
-
-		_ = renderImageTermimg(path, x, y, w, h)
-		return nil
+func (m model) renderImages() {
+	items := m.getCurrentItems()
+	if len(items) == 0 || terminal == nil {
+		return
 	}
+
+	visibleRows := m.visibleRows()
+	startRow := m.gridOffset
+	endRow := startRow + visibleRows
+
+	for row := startRow; row < endRow; row++ {
+		for col := 0; col < m.gridCols; col++ {
+			idx := row*m.gridCols + col
+			if idx >= len(items) {
+				continue
+			}
+
+			student := items[idx]
+			iconPath, ok := m.iconPaths[student.Id]
+			if !ok {
+				continue
+			}
+
+			visibleRow := row - m.gridOffset
+			gridX := 3 + col*thumbW
+			gridCellY := 3 + visibleRow*thumbH
+
+			iconY := gridCellY + 1
+			iconW := thumbW - 2
+			iconH := thumbH - 3
+
+			_ = renderImageTermimg(iconPath, gridX, iconY, iconW, iconH)
+		}
+	}
+
+	if m.gridIdx < 0 || m.gridIdx >= len(items) {
+		return
+	}
+
+	student := items[m.gridIdx]
+	path := ensurePortraitCached(student.Id, m.downloader)
+	if path == "" {
+		return
+	}
+
+	gridW := m.width - PreviewW - 9
+	if gridW < thumbW+4 {
+		gridW = thumbW + 4
+	}
+
+	x := gridW + 6
+	y := 3
+	w, h := PreviewW-2, PreviewH-6
+
+	_ = renderImageTermimg(path, x, y, w, h)
 }
+
+func (m model) scheduleRenderCmd() tea.Cmd {
+	return tea.Tick(time.Millisecond, func(time.Time) tea.Msg {
+		return renderImagesMsg{}
+	})
+}
+
+type renderImagesMsg struct{}
 
 func downloadIconCmd(studentId int, downloader *Downloader) tea.Cmd {
 	return func() tea.Msg {
