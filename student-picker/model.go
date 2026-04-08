@@ -517,12 +517,13 @@ func (m model) renderImages() {
 			}
 
 			visibleRow := row - m.gridOffset
-			gridX := 2 + col*thumbW + 1
+			// screenX = MasterBox(border 1 + padding 1) + GridBox(border 1 + padding 1) + col*thumbW + itemBorder(1)
+			gridX := 5 + col*thumbW
 			gridCellY := 3 + visibleRow*thumbH
 
 			iconY := gridCellY + 1
-			iconW := thumbW - 4
-			iconH := thumbH - 3
+			iconW := thumbW - 2
+			iconH := thumbH - 2
 
 			_ = renderImageTermimg(iconPath, gridX, iconY, iconW, iconH, true)
 		}
@@ -547,11 +548,11 @@ func (m model) renderImages() {
 	y := 3
 	w, h := PreviewW-2, PreviewH-7
 
-	_ = renderImageTermimg(path, x, y, w, h, true)
+	_ = drawPreviewImage(path, x, y, w, h)
 }
 
 func (m model) scheduleRenderCmd() tea.Cmd {
-	return tea.Tick(time.Millisecond, func(time.Time) tea.Msg {
+	return tea.Tick(16*time.Millisecond, func(time.Time) tea.Msg {
 		return renderImagesMsg{}
 	})
 }

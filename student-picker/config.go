@@ -26,7 +26,7 @@ const (
 // Preview dimensions
 const (
 	PreviewW = 40
-	PreviewH = 20
+	PreviewH = 30
 )
 
 // CacheDir returns the cache directory path.
