@@ -1,4 +1,4 @@
-package picker
+package main
 
 import (
 	"encoding/json"
@@ -183,7 +183,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		// Block repeat for action keys; allow repeat for navigation
-		if msg.Key().IsRepeat && !IsNavKey(msg.String()) {
+		if msg.Key().IsRepeat && !isNavKey(msg.String()) {
 			return m, nil
 		}
 
@@ -237,8 +237,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// IsNavKey returns true for keys that should be repeatable (held down).
-func IsNavKey(key string) bool {
+// isNavKey returns true for keys that should be repeatable (held down).
+func isNavKey(key string) bool {
 	switch key {
 	case "up", "down", "left", "right", "k", "j", "h", "l",
 		"pgup", "pgdown", "home", "end":
@@ -330,7 +330,7 @@ func (m *model) applyFilter() {
 	if m.searchQuery == "" {
 		m.filtered = m.manifest
 	} else {
-		m.filtered = FilterStudents(m.manifest, m.searchQuery)
+		m.filtered = filterStudents(m.manifest, m.searchQuery)
 	}
 	m.gridIdx = 0
 	m.gridOffset = 0
@@ -584,7 +584,7 @@ func downloadIconCmd(studentId int, downloader *Downloader) tea.Cmd {
 
 // --- Manifest ---
 
-func FilterStudents(students []Student, query string) []Student {
+func filterStudents(students []Student, query string) []Student {
 	if query == "" {
 		return students
 	}
@@ -623,21 +623,21 @@ func fetchManifestCmd() tea.Msg {
 		}
 		return manifestLoadedMsg{students: students}
 	}
-	students, err := ParseManifest(data)
+	students, err := parseManifest(data)
 	if err != nil {
-		log.Printf("ParseManifest error: %v", err)
+		log.Printf("parseManifest error: %v", err)
 		return manifestLoadedMsg{students: []Student{}}
 	}
 	return manifestLoadedMsg{students: students}
 }
 
-func ParseManifest(data []byte) ([]Student, error) {
+func parseManifest(data []byte) ([]Student, error) {
 	var students []Student
 	if err := json.Unmarshal(data, &students); err != nil {
 		return nil, err
 	}
 	for i := range students {
-		ComputeVariant(&students[i])
+		computeVariant(&students[i])
 	}
 	return students, nil
 }

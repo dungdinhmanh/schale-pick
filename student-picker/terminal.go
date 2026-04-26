@@ -1,4 +1,4 @@
-package picker
+package main
 
 import (
 	"os"

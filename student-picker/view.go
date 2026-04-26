@@ -1,4 +1,4 @@
-package picker
+package main
 
 import (
 	"fmt"
@@ -437,7 +437,7 @@ func (m model) renderListItem(s Student, selected bool) string {
 		innerW = 1
 	}
 
-	name, _ := DisplayName(s, innerW)
+	name, _ := displayName(s, innerW)
 
 	nameRendered := lipgloss.NewStyle().
 		Width(innerW).
@@ -529,7 +529,7 @@ func (m model) renderLegendBar() string {
 	seen := map[string]string{}
 	for i := startIdx; i < endIdx; i++ {
 		s := items[i]
-		_, used := DisplayName(s, innerW)
+		_, used := displayName(s, innerW)
 		if used && s.Abbr != "" && s.Variant != "" {
 			seen[s.Abbr] = s.Variant
 		}
