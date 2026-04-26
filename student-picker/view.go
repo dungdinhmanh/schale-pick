@@ -455,8 +455,8 @@ func (m model) renderPreview(containerH int) string {
 	if innerH < 4 {
 		innerH = 4
 	}
-	// reserve 3 lines for name + spacer + bottom padding; rest is image area
-	imageH := innerH - 3
+	// reserve 1 line for name; rest is image area
+	imageH := innerH - 1
 	if imageH < 2 {
 		imageH = 2
 	}

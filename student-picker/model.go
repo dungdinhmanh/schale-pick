@@ -433,9 +433,18 @@ func (m model) renderImages() {
 		listW = 16
 	}
 
-	x := listW + 6
+	// Compute image height to match renderPreview's imageH (innerH - 1)
+	rows := m.visibleRows()
+	gridBoxH := 2 + rows*gridItemH
+	innerH := gridBoxH - 2
+	imageH := innerH - 1
+	if imageH < 2 {
+		imageH = 2
+	}
+
+	x := listW + 8
 	y := 3
-	w, h := PreviewW-2, PreviewH-7
+	w, h := PreviewW-2, imageH
 
 	_ = drawPreviewImage(path, x, y, w, h)
 }

@@ -9,13 +9,14 @@ import (
 	"os"
 	"sync"
 
+	_ "image/jpeg"
+	_ "image/png"
+
 	"github.com/srlehn/termimg"
 	_ "github.com/srlehn/termimg/drawers/all"
 	"github.com/srlehn/termimg/term"
 	_ "github.com/srlehn/termimg/terminals"
 	_ "golang.org/x/image/webp"
-	_ "image/jpeg"
-	_ "image/png"
 )
 
 // Kitty replaces placements with same image ID, eliminating flicker on re-render.
@@ -135,6 +136,8 @@ func drawImageWithID(img image.Image, x, y, w, h, imageID int) error {
 
 	drawMu.Lock()
 	defer drawMu.Unlock()
+	// Delete previous placement of this image ID before drawing the new one
+	_, _ = tm.Printf("\x1b_Ga=d,d=i,i=%d;\x1b\\", imageID)
 	_, err = tm.Printf("%s", kittyStr)
 	return err
 }
@@ -175,6 +178,8 @@ func ClearImages() {
 
 	if terminal != nil {
 		terminalMu.Lock()
+		// Send Kitty delete-all before termimg cleanup
+		_, _ = terminal.Printf("\x1b_Ga=d;\x1b\\")
 		termimg.CleanUp()
 		terminalMu.Unlock()
 	}
