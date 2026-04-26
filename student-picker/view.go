@@ -138,9 +138,10 @@ func (m model) viewMain() string {
 
 func (m model) viewSettings() string {
 	cacheDir := CacheDir()
-	inner := m.width - 6 // masterBox border(2) + padding(2) + settingsBox border(2)
-	if inner < 20 {
-		inner = 20
+	// Cap boxes to the grid-area width so they don't span into the preview column.
+	inner := m.width - PreviewW - 6
+	if inner < 40 {
+		inner = 40
 	}
 	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086"))
 
@@ -192,8 +193,7 @@ func (m model) viewSettings() string {
 
 	// Setting 1: Cache Size
 	cacheSizeRow := label.Render("Cache Size   ") +
-		dim.Render("◀  ") + active.Render(fmt.Sprintf("%2d", m.cacheSize)) + dim.Render("  ▶") +
-		dim.Render(fmt.Sprintf("  (portraits kept on disk, 1–20)"))
+		dim.Render("◀  ") + active.Render(fmt.Sprintf("%2d", m.cacheSize)) + dim.Render("  ▶")
 	if m.settingsIdx == 1 {
 		cacheSizeRow = highlight.Render(" ▶ " + cacheSizeRow + " ")
 	} else {
@@ -209,8 +209,7 @@ func (m model) viewSettings() string {
 		backupOn = dim.Render(" on  ")
 		backupOff = active.Render("[off]")
 	}
-	autoBackupRow := label.Render("Auto Backup  ") + backupOn + backupOff +
-		dim.Render("  (backup fastfetch config before overwriting)")
+	autoBackupRow := label.Render("Auto Backup  ") + backupOn + backupOff
 	if m.settingsIdx == 2 {
 		autoBackupRow = highlight.Render(" ▶ " + autoBackupRow + " ")
 	} else {

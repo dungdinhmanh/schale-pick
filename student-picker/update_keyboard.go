@@ -58,7 +58,10 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case "?":
 		m.modal = modal{kind: modalHelp}
-		return m, nil
+		return m, func() tea.Msg {
+			clearImagesTermimg()
+			return nil
+		}
 
 	case "up", "k":
 		if m.gridIdx >= m.gridCols {
