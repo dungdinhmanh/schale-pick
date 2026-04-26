@@ -588,7 +588,7 @@ func updateFastfetchImage(imagePath string, termLines int, termType string, logo
 		"--arg", "source", imagePath,
 		"--arg", "itype", imgType,
 		"--argjson", "width", strconv.Itoa(fastW),
-		".logo.source = $source | .logo.type = $itype | .logo.width = $width",
+		`.logo.source = $source | .logo.type = $itype | .logo.width = $width | .logo.padding = {"top":0,"left":2,"right":4}`,
 		configPath,
 	)
 	output, err := cmd.Output()
