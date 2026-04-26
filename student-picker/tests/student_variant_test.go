@@ -1,12 +1,16 @@
-package main
+package picker_test
 
-import "testing"
+import (
+	"testing"
 
-// --- makeAbbr ---
+	"student-picker/internal/picker"
+)
+
+// --- MakeAbbr ---
 
 func TestMakeAbbrEmpty(t *testing.T) {
-	if got := makeAbbr(""); got != "" {
-		t.Errorf("makeAbbr('') = %q, want ''", got)
+	if got := picker.MakeAbbr(""); got != "" {
+		t.Errorf("MakeAbbr('') = %q, want ''", got)
 	}
 }
 
@@ -18,9 +22,9 @@ func TestMakeAbbrSingleWord(t *testing.T) {
 		{"ab", "AB"},
 	}
 	for _, c := range cases {
-		got := makeAbbr(c.in)
+		got := picker.MakeAbbr(c.in)
 		if got != c.want {
-			t.Errorf("makeAbbr(%q) = %q, want %q", c.in, got, c.want)
+			t.Errorf("MakeAbbr(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
@@ -32,18 +36,18 @@ func TestMakeAbbrMultiWord(t *testing.T) {
 		{"New Year Party", "NYP"},
 	}
 	for _, c := range cases {
-		got := makeAbbr(c.in)
+		got := picker.MakeAbbr(c.in)
 		if got != c.want {
-			t.Errorf("makeAbbr(%q) = %q, want %q", c.in, got, c.want)
+			t.Errorf("MakeAbbr(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
 
-// --- computeVariant ---
+// --- ComputeVariant ---
 
 func TestComputeVariantNoParens(t *testing.T) {
-	s := Student{Name: "Hanako", PersonalName: "Hanako"}
-	computeVariant(&s)
+	s := picker.Student{Name: "Hanako", PersonalName: "Hanako"}
+	picker.ComputeVariant(&s)
 	if s.Base != "Hanako" {
 		t.Errorf("Base = %q, want 'Hanako'", s.Base)
 	}
@@ -56,8 +60,8 @@ func TestComputeVariantNoParens(t *testing.T) {
 }
 
 func TestComputeVariantSingleWord(t *testing.T) {
-	s := Student{Name: "Hanako (Swimsuit)", PersonalName: "Hanako"}
-	computeVariant(&s)
+	s := picker.Student{Name: "Hanako (Swimsuit)", PersonalName: "Hanako"}
+	picker.ComputeVariant(&s)
 	if s.Base != "Hanako" {
 		t.Errorf("Base = %q, want 'Hanako'", s.Base)
 	}
@@ -70,8 +74,8 @@ func TestComputeVariantSingleWord(t *testing.T) {
 }
 
 func TestComputeVariantMultiWord(t *testing.T) {
-	s := Student{Name: "Hina (New Year)", PersonalName: "Hina"}
-	computeVariant(&s)
+	s := picker.Student{Name: "Hina (New Year)", PersonalName: "Hina"}
+	picker.ComputeVariant(&s)
 	if s.Base != "Hina" {
 		t.Errorf("Base = %q, want 'Hina'", s.Base)
 	}
@@ -84,8 +88,8 @@ func TestComputeVariantMultiWord(t *testing.T) {
 }
 
 func TestComputeVariantEmptyNameFallsBackToPersonal(t *testing.T) {
-	s := Student{Name: "", PersonalName: "Hanako", FamilyName: "Ichinose"}
-	computeVariant(&s)
+	s := picker.Student{Name: "", PersonalName: "Hanako", FamilyName: "Ichinose"}
+	picker.ComputeVariant(&s)
 	if s.Name != "Hanako" {
 		t.Errorf("Name should fall back to PersonalName, got %q", s.Name)
 	}
@@ -94,13 +98,13 @@ func TestComputeVariantEmptyNameFallsBackToPersonal(t *testing.T) {
 	}
 }
 
-// --- displayName ---
+// --- DisplayName ---
 
 func TestDisplayNameFitsFullName(t *testing.T) {
-	s := Student{Name: "Hina (Swimsuit)", Base: "Hina", Variant: "Swimsuit", Abbr: "SW"}
-	name, abbrUsed := displayName(s, 20)
+	s := picker.Student{Name: "Hina (Swimsuit)", Base: "Hina", Variant: "Swimsuit", Abbr: "SW"}
+	name, abbrUsed := picker.DisplayName(s, 20)
 	if name != "Hina (Swimsuit)" {
-		t.Errorf("displayName = %q, want 'Hina (Swimsuit)'", name)
+		t.Errorf("DisplayName = %q, want 'Hina (Swimsuit)'", name)
 	}
 	if abbrUsed {
 		t.Error("abbrUsed should be false when full name fits")
@@ -108,11 +112,10 @@ func TestDisplayNameFitsFullName(t *testing.T) {
 }
 
 func TestDisplayNameUsesAbbrWhenTight(t *testing.T) {
-	s := Student{Name: "Hina (Swimsuit)", Base: "Hina", Variant: "Swimsuit", Abbr: "SW"}
-	// "Hina (Swimsuit)" = 15 chars, "Hina (SW)" = 9 chars
-	name, abbrUsed := displayName(s, 10)
+	s := picker.Student{Name: "Hina (Swimsuit)", Base: "Hina", Variant: "Swimsuit", Abbr: "SW"}
+	name, abbrUsed := picker.DisplayName(s, 10)
 	if name != "Hina (SW)" {
-		t.Errorf("displayName = %q, want 'Hina (SW)'", name)
+		t.Errorf("DisplayName = %q, want 'Hina (SW)'", name)
 	}
 	if !abbrUsed {
 		t.Error("abbrUsed should be true")
@@ -120,31 +123,31 @@ func TestDisplayNameUsesAbbrWhenTight(t *testing.T) {
 }
 
 func TestDisplayNameTruncatesWhenNoAbbr(t *testing.T) {
-	s := Student{Name: "VeryLongNameHere", Base: "VeryLongNameHere", Variant: "", Abbr: ""}
-	name, _ := displayName(s, 8)
-	if runeLen(name) > 8 {
+	s := picker.Student{Name: "VeryLongNameHere", Base: "VeryLongNameHere"}
+	name, _ := picker.DisplayName(s, 8)
+	if picker.RuneLen(name) > 8 {
 		t.Errorf("truncated name %q is wider than 8", name)
 	}
 }
 
 func TestDisplayNameNoVariantNoTruncNeeded(t *testing.T) {
-	s := Student{Name: "Hanako", Base: "Hanako", Variant: "", Abbr: ""}
-	name, abbrUsed := displayName(s, 10)
+	s := picker.Student{Name: "Hanako", Base: "Hanako"}
+	name, abbrUsed := picker.DisplayName(s, 10)
 	if name != "Hanako" {
-		t.Errorf("displayName = %q, want 'Hanako'", name)
+		t.Errorf("DisplayName = %q, want 'Hanako'", name)
 	}
 	if abbrUsed {
 		t.Error("abbrUsed should be false")
 	}
 }
 
-// --- runeLen ---
+// --- RuneLen ---
 
 func TestRuneLen(t *testing.T) {
-	if runeLen("abc") != 3 {
-		t.Error("ascii runeLen wrong")
+	if picker.RuneLen("abc") != 3 {
+		t.Error("ascii RuneLen wrong")
 	}
-	if runeLen("こんにちは") != 5 {
-		t.Error("cjk runeLen wrong")
+	if picker.RuneLen("こんにちは") != 5 {
+		t.Error("cjk RuneLen wrong")
 	}
 }

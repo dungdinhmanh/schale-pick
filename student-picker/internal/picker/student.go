@@ -1,4 +1,4 @@
-package main
+package picker
 
 import (
 	"regexp"
@@ -19,10 +19,10 @@ type Student struct {
 
 var variantRegex = regexp.MustCompile(`^(.+?)\s*\(([^()]+)\)\s*$`)
 
-// computeVariant parses Name and fills Base/Variant/Abbr.
+// ComputeVariant parses Name and fills Base/Variant/Abbr.
 // Abbr for single-word variant = first 2 uppercase chars ("Swimsuit" → "SW").
 // Abbr for multi-word variant = initials of each word ("New Year" → "NY").
-func computeVariant(s *Student) {
+func ComputeVariant(s *Student) {
 	if s.Name == "" {
 		s.Name = s.PersonalName
 	}
@@ -35,11 +35,11 @@ func computeVariant(s *Student) {
 	}
 	s.Base = strings.TrimSpace(m[1])
 	s.Variant = strings.TrimSpace(m[2])
-	s.Abbr = makeAbbr(s.Variant)
+	s.Abbr = MakeAbbr(s.Variant)
 }
 
-// makeAbbr converts a variant string to its abbreviation.
-func makeAbbr(variant string) string {
+// MakeAbbr converts a variant string to its abbreviation.
+func MakeAbbr(variant string) string {
 	words := strings.Fields(variant)
 	if len(words) == 0 {
 		return ""
@@ -69,20 +69,20 @@ func makeAbbr(variant string) string {
 	return abbr
 }
 
-// displayName returns the best name to show in a grid cell of given innerWidth.
+// DisplayName returns the best name to show in a grid cell of given innerWidth.
 // Returns the display string and whether abbreviation was used.
-func displayName(s Student, innerW int) (name string, abbrUsed bool) {
+func DisplayName(s Student, innerW int) (name string, abbrUsed bool) {
 	full := s.Name
 	if full == "" {
 		full = s.PersonalName
 	}
-	if runeLen(full) <= innerW {
+	if RuneLen(full) <= innerW {
 		return full, false
 	}
 	// Try abbreviated variant
 	if s.Variant != "" && s.Abbr != "" {
 		abbrName := s.Base + " (" + s.Abbr + ")"
-		if runeLen(abbrName) <= innerW {
+		if RuneLen(abbrName) <= innerW {
 			return abbrName, true
 		}
 	}
@@ -94,6 +94,6 @@ func displayName(s Student, innerW int) (name string, abbrUsed bool) {
 	return string(runes[:innerW-1]) + "…", s.Variant != ""
 }
 
-func runeLen(s string) int {
+func RuneLen(s string) int {
 	return len([]rune(s))
 }

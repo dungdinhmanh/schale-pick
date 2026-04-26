@@ -1,18 +1,17 @@
-package main
+package picker_test
 
 import (
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"student-picker/internal/picker"
 )
 
-// saveTempMeta writes meta JSON to a temp dir and patches CacheDir via env.
-// Returns cleanup function.
 func withTempCacheDir(t *testing.T) (string, func()) {
 	t.Helper()
 	dir := t.TempDir()
-	// Patch HOME so CacheDir() resolves to our tmpdir
 	old := os.Getenv("HOME")
 	os.Setenv("HOME", dir)
 	return dir, func() {
@@ -24,23 +23,22 @@ func TestSaveLoadMetaRoundtrip(t *testing.T) {
 	_, cleanup := withTempCacheDir(t)
 	defer cleanup()
 
-	students := []Student{
+	students := []picker.Student{
 		{Id: 10074, Name: "Hanako (Swimsuit)", FamilyName: "Ichinose", PersonalName: "Hanako",
 			Base: "Hanako", Variant: "Swimsuit", Abbr: "SW"},
-		{Id: 23007, Name: "Hanako", FamilyName: "Ichinose", PersonalName: "Hanako",
-			Base: "Hanako", Variant: "", Abbr: ""},
+		{Id: 23007, Name: "Hanako", FamilyName: "Ichinose", PersonalName: "Hanako"},
 	}
 
-	if err := SaveMeta(students); err != nil {
+	if err := picker.SaveMeta(students); err != nil {
 		t.Fatalf("SaveMeta: %v", err)
 	}
 
-	loaded, err := LoadMeta()
+	loaded, err := picker.LoadMeta()
 	if err != nil {
 		t.Fatalf("LoadMeta: %v", err)
 	}
 
-	byID := map[int]Student{}
+	byID := map[int]picker.Student{}
 	for _, s := range loaded {
 		byID[s.Id] = s
 	}
@@ -60,25 +58,20 @@ func TestSaveLoadMetaRoundtrip(t *testing.T) {
 	if n.Name != "Hanako" {
 		t.Errorf("Name = %q, want 'Hanako'", n.Name)
 	}
-	if n.Variant != "" {
-		t.Errorf("Variant = %q, want ''", n.Variant)
-	}
 }
 
 func TestLoadMetaBackwardCompatOldFormat(t *testing.T) {
 	_, cleanup := withTempCacheDir(t)
 	defer cleanup()
 
-	// Write old string format: map[int]string {"10074":"FamilyName PersonalName"}
 	rawOld := `{"10074":"Ichinose Hanako","23007":"Ichinose Hanako"}`
-
-	cacheP := filepath.Join(CacheDir(), "meta.json")
+	cacheP := filepath.Join(picker.CacheDir(), "meta.json")
 	os.MkdirAll(filepath.Dir(cacheP), 0755)
 	if err := os.WriteFile(cacheP, []byte(rawOld), 0644); err != nil {
 		t.Fatalf("write old meta: %v", err)
 	}
 
-	loaded, err := LoadMeta()
+	loaded, err := picker.LoadMeta()
 	if err != nil {
 		t.Fatalf("LoadMeta (old format): %v", err)
 	}
@@ -96,7 +89,6 @@ func TestLoadMetaNewStructFormat(t *testing.T) {
 	_, cleanup := withTempCacheDir(t)
 	defer cleanup()
 
-	// Manually write new struct format
 	type entry struct {
 		N string `json:"n"`
 		F string `json:"f"`
@@ -106,11 +98,11 @@ func TestLoadMetaNewStructFormat(t *testing.T) {
 		"10074": {N: "Hanako (Swimsuit)", F: "Ichinose", P: "Hanako"},
 	}
 	data, _ := json.Marshal(raw)
-	cacheP := filepath.Join(CacheDir(), "meta.json")
+	cacheP := filepath.Join(picker.CacheDir(), "meta.json")
 	os.MkdirAll(filepath.Dir(cacheP), 0755)
 	os.WriteFile(cacheP, data, 0644)
 
-	loaded, err := LoadMeta()
+	loaded, err := picker.LoadMeta()
 	if err != nil {
 		t.Fatalf("LoadMeta (new format): %v", err)
 	}

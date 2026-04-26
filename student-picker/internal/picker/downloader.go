@@ -1,4 +1,4 @@
-package main
+package picker
 
 import (
 	"context"
@@ -125,7 +125,7 @@ func LoadMeta() ([]Student, error) {
 					FamilyName:   e.FamilyName,
 					PersonalName: e.PersonalName,
 				}
-				computeVariant(&s)
+				ComputeVariant(&s)
 				students = append(students, s)
 			}
 			return students, nil
@@ -146,7 +146,7 @@ func LoadMeta() ([]Student, error) {
 			pers = parts[1]
 		}
 		s := Student{Id: id, FamilyName: fam, PersonalName: pers}
-		computeVariant(&s)
+		ComputeVariant(&s)
 		students = append(students, s)
 	}
 	return students, nil
