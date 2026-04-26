@@ -156,16 +156,40 @@ func (m model) handleSettingsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.settingsIdx--
 		}
 	case "down", "j":
-		if m.settingsIdx < 0 { // 0 is currently the only setting
+		if m.settingsIdx < 2 {
 			m.settingsIdx++
 		}
-	case "left", "right", "h", "l":
-		if m.settingsIdx == 0 {
+	case "left", "h":
+		switch m.settingsIdx {
+		case 0:
 			if m.logoFormat == "kitty" {
 				m.logoFormat = "raw"
 			} else {
 				m.logoFormat = "kitty"
 			}
+		case 1:
+			if m.cacheSize > 1 {
+				m.cacheSize--
+				m.cache.SetMaxSize(m.cacheSize)
+			}
+		case 2:
+			m.autoBackup = !m.autoBackup
+		}
+	case "right", "l":
+		switch m.settingsIdx {
+		case 0:
+			if m.logoFormat == "kitty" {
+				m.logoFormat = "raw"
+			} else {
+				m.logoFormat = "kitty"
+			}
+		case 1:
+			if m.cacheSize < 20 {
+				m.cacheSize++
+				m.cache.SetMaxSize(m.cacheSize)
+			}
+		case 2:
+			m.autoBackup = !m.autoBackup
 		}
 	}
 	return m, nil

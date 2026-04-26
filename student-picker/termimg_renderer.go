@@ -270,7 +270,13 @@ func renderImageTermimg(imagePath string, x, y, w, h int, preserveAspectRatio bo
 
 func clearImagesTermimg() {
 	defer func() { recover() }()
-	ClearImages()
+	if terminal == nil {
+		return
+	}
+	drawMu.Lock()
+	defer drawMu.Unlock()
+	// Delete all Kitty image placements without tearing down the terminal
+	_, _ = terminal.Printf("\x1b_Ga=d;\x1b\\")
 }
 
 func cleanupTermimg() {
