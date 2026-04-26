@@ -469,12 +469,18 @@ func (m model) renderPreview(containerH int) string {
 			Render("No image")
 	} else {
 		student := items[m.gridIdx]
-		fullName := student.Name
-		if fullName == "" {
-			fullName = student.PersonalName
-			if student.FamilyName != "" {
-				fullName += " " + student.FamilyName
+		fullName := student.FamilyName
+		if student.PersonalName != "" {
+			if fullName != "" {
+				fullName += " "
 			}
+			fullName += student.PersonalName
+		}
+		if student.Variant != "" {
+			fullName += " (" + student.Variant + ")"
+		}
+		if fullName == "" {
+			fullName = student.Name
 		}
 
 		imagePlaceholder := lipgloss.NewStyle().
