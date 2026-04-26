@@ -11,7 +11,6 @@ import (
 // CachedImage represents a cached student image
 type CachedImage struct {
 	StudentId    int
-	IconPath     string
 	PortraitPath string
 	CachedAt     time.Time
 }
@@ -51,21 +50,12 @@ func (c *Cache) Get(studentId int) (CachedImage, bool) {
 }
 
 // Put adds an image to the cache, evicting oldest if necessary
-func (c *Cache) Put(studentId int, iconData, portraitData []byte) error {
+func (c *Cache) Put(studentId int, portraitData []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	// Ensure directory exists
 	if err := os.MkdirAll(c.dir, 0755); err != nil {
-		return err
-	}
-
-	// Write icon
-	iconPath := filepath.Join(c.dir, "icon", strconv.Itoa(studentId)+".webp")
-	if err := os.MkdirAll(filepath.Dir(iconPath), 0755); err != nil {
-		return err
-	}
-	if err := os.WriteFile(iconPath, iconData, 0644); err != nil {
 		return err
 	}
 
@@ -81,7 +71,6 @@ func (c *Cache) Put(studentId int, iconData, portraitData []byte) error {
 	// Add to cache
 	c.items[studentId] = CachedImage{
 		StudentId:    studentId,
-		IconPath:     iconPath,
 		PortraitPath: portraitPath,
 		CachedAt:     time.Now(),
 	}
@@ -116,7 +105,6 @@ func (c *Cache) Clear() error {
 	defer c.mu.Unlock()
 
 	for _, img := range c.items {
-		os.Remove(img.IconPath)
 		os.Remove(img.PortraitPath)
 	}
 	c.items = make(map[int]CachedImage)
@@ -141,7 +129,6 @@ func (c *Cache) evictOldest() {
 	oldest := c.order[0]
 	c.order = c.order[1:]
 	if img, ok := c.items[oldest]; ok {
-		os.Remove(img.IconPath)
 		os.Remove(img.PortraitPath)
 	}
 	delete(c.items, oldest)

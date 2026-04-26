@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -65,8 +64,6 @@ type model struct {
 	statusIsErr   bool
 	statusTimer   time.Time
 	previewPath   string
-	iconPaths     map[int]string
-	iconPending   map[int]bool
 	modal         modal
 	hasMagick     bool
 	termType      string
@@ -83,8 +80,6 @@ func newModel() model {
 		cache:       NewCache(CacheDir(), DefaultCacheSize),
 		downloader:  NewDownloader(5),
 		loading:     true,
-		iconPaths:   make(map[int]string),
-		iconPending: make(map[int]bool),
 		termType:    detectTerminalType(),
 		logoFormat:  "kitty",
 	}
@@ -161,7 +156,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.clampOffset()
-		return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
+		return m, m.scheduleRenderCmd()
 
 	case tea.KeyPressMsg:
 		// Block repeat for action keys; allow repeat for navigation
@@ -203,13 +198,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = ""
 		}
 		return m, nil
-
-	case iconDownloadedMsg:
-		delete(m.iconPending, msg.studentId)
-		if msg.err == nil && msg.iconPath != "" {
-			m.iconPaths[msg.studentId] = msg.iconPath
-		}
-		return m, m.scheduleRenderCmd()
 
 	case renderImagesMsg:
 		go m.renderImages()
@@ -322,22 +310,6 @@ func (m *model) preCachePortraits() {
 		return
 	}
 
-	iconCount := 20
-	if iconCount > count {
-		iconCount = count
-	}
-
-	for i := 0; i < iconCount; i++ {
-		studentId := items[i].Id
-		iconPath := getIconPath(studentId)
-		if _, err := os.Stat(iconPath); err != nil {
-			data, err := m.downloader.DownloadIcon(studentId)
-			if err == nil {
-				os.WriteFile(iconPath, data, 0644)
-			}
-		}
-	}
-
 	if m.gridIdx < count {
 		studentId := items[m.gridIdx].Id
 		data, err := m.downloader.DownloadPortrait(studentId)
@@ -384,26 +356,11 @@ func (m model) doCacheAndSelect(studentId int) tea.Cmd {
 		studentName = student.PersonalName
 	}
 	return func() tea.Msg {
-		var iconData, portraitData []byte
-		var iconErr, portraitErr error
-		var wg sync.WaitGroup
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			iconData, iconErr = m.downloader.DownloadIcon(studentId)
-		}()
-		go func() {
-			defer wg.Done()
-			portraitData, portraitErr = m.downloader.DownloadPortrait(studentId)
-		}()
-		wg.Wait()
-		if iconErr != nil {
-			return cacheErrorMsg{err: iconErr}
+		portraitData, err := m.downloader.DownloadPortrait(studentId)
+		if err != nil {
+			return cacheErrorMsg{err: err}
 		}
-		if portraitErr != nil {
-			return cacheErrorMsg{err: portraitErr}
-		}
-		m.cache.Put(studentId, iconData, portraitData)
+		m.cache.Put(studentId, portraitData)
 
 		cached, ok := m.cache.Get(studentId)
 		if !ok {
@@ -453,51 +410,6 @@ type showModalMsg struct {
 	studentId int
 }
 
-// --- Icon Rendering ---
-
-func (m model) getVisibleIconBatch() tea.Cmd {
-	items := m.getCurrentItems()
-	if len(items) == 0 {
-		return nil
-	}
-
-	visibleRows := m.visibleRows()
-	startRow := m.gridOffset
-	endRow := startRow + visibleRows
-
-	var cmds []tea.Cmd
-
-	for row := startRow; row < endRow; row++ {
-		for col := 0; col < m.gridCols; col++ {
-			idx := row*m.gridCols + col
-			if idx >= len(items) {
-				continue
-			}
-
-			student := items[idx]
-			iconPath := getIconPath(student.Id)
-
-			if _, err := os.Stat(iconPath); err == nil {
-				m.iconPaths[student.Id] = iconPath
-				continue
-			}
-
-			if m.iconPending[student.Id] {
-				continue
-			}
-
-			m.iconPending[student.Id] = true
-			cmds = append(cmds, downloadIconCmd(student.Id, m.downloader))
-		}
-	}
-
-	if len(cmds) == 0 {
-		return nil
-	}
-
-	return tea.Batch(cmds...)
-}
-
 func (m model) renderImages() {
 	items := m.getCurrentItems()
 	if len(items) == 0 || terminal == nil {
@@ -534,30 +446,6 @@ func (m model) scheduleRenderCmd() tea.Cmd {
 
 type renderImagesMsg struct{}
 
-func downloadIconCmd(studentId int, downloader *Downloader) tea.Cmd {
-	return func() tea.Msg {
-		iconPath := getIconPath(studentId)
-		if _, err := os.Stat(iconPath); err == nil {
-			return iconDownloadedMsg{studentId: studentId, iconPath: iconPath}
-		}
-
-		if downloader == nil {
-			return iconDownloadedMsg{studentId: studentId, err: fmt.Errorf("no downloader")}
-		}
-
-		data, err := downloader.DownloadIcon(studentId)
-		if err != nil {
-			return iconDownloadedMsg{studentId: studentId, err: err}
-		}
-
-		if err := os.WriteFile(iconPath, data, 0644); err != nil {
-			return iconDownloadedMsg{studentId: studentId, err: err}
-		}
-
-		return iconDownloadedMsg{studentId: studentId, iconPath: iconPath}
-	}
-}
-
 // --- Manifest ---
 
 func filterStudents(students []Student, query string) []Student {
@@ -581,12 +469,6 @@ func filterStudents(students []Student, query string) []Student {
 
 type manifestLoadedMsg struct {
 	students []Student
-}
-
-type iconDownloadedMsg struct {
-	studentId int
-	iconPath  string
-	err       error
 }
 
 func fetchManifestCmd() tea.Msg {
