@@ -61,7 +61,6 @@ type model struct {
 	downloader    *Downloader
 	loading       bool
 	isDownloading bool
-	downloadPct   float64
 	status        string
 	statusIsErr   bool
 	statusTimer   time.Time
@@ -118,25 +117,8 @@ type magickCheckMsg struct {
 	available bool
 }
 
-type downloadProgressMsg float64
-
-func tickDownload() tea.Cmd {
-	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
-		return downloadProgressMsg(0.1)
-	})
-}
-
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case downloadProgressMsg:
-		if m.isDownloading {
-			m.downloadPct += float64(msg)
-			if m.downloadPct > 0.95 {
-				m.downloadPct = 0.95 // Giữ ở 95% cho đến khi xong thực tế
-			}
-			return m, tickDownload()
-		}
-		return m, nil
 	case magickCheckMsg:
 		m.hasMagick = msg.available
 		return m, nil
@@ -204,7 +186,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case cacheSuccessMsg:
 		m.isDownloading = false
-		m.downloadPct = 1.0
 		m.status = fmt.Sprintf("Selected: %s", msg.name)
 		m.statusIsErr = false
 		m.statusTimer = time.Now().Add(3 * time.Second)
@@ -293,15 +274,13 @@ func (m *model) clampOffset() {
 }
 
 func (m model) visibleRows() int {
-	masterBorder := 2
-	titleLine := 1
-	headerLine := 1
-	statusLine := 1
-	helpLine := 1
-
-	availableHeight := m.height - masterBorder - titleLine - headerLine - statusLine - helpLine
-
-	rows := availableHeight / gridItemH
+	// marginTop(1) + masterBox borders(2) + gridBox borders(2) + helpLine(1) + statusLine(1) + legendLine(1)
+	overhead := 8
+	if m.height == 0 {
+		return 4
+	}
+	available := m.height - overhead
+	rows := available / gridItemH
 	if rows < 1 {
 		rows = 1
 	}
@@ -404,41 +383,38 @@ func (m model) doCacheAndSelect(studentId int) tea.Cmd {
 	if studentName == "" {
 		studentName = student.PersonalName
 	}
-	return tea.Batch(
-		func() tea.Msg {
-			var iconData, portraitData []byte
-			var iconErr, portraitErr error
-			var wg sync.WaitGroup
-			wg.Add(2)
-			go func() {
-				defer wg.Done()
-				iconData, iconErr = m.downloader.DownloadIcon(studentId)
-			}()
-			go func() {
-				defer wg.Done()
-				portraitData, portraitErr = m.downloader.DownloadPortrait(studentId)
-			}()
-			wg.Wait()
-			if iconErr != nil {
-				return cacheErrorMsg{err: iconErr}
-			}
-			if portraitErr != nil {
-				return cacheErrorMsg{err: portraitErr}
-			}
-			m.cache.Put(studentId, iconData, portraitData)
+	return func() tea.Msg {
+		var iconData, portraitData []byte
+		var iconErr, portraitErr error
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			iconData, iconErr = m.downloader.DownloadIcon(studentId)
+		}()
+		go func() {
+			defer wg.Done()
+			portraitData, portraitErr = m.downloader.DownloadPortrait(studentId)
+		}()
+		wg.Wait()
+		if iconErr != nil {
+			return cacheErrorMsg{err: iconErr}
+		}
+		if portraitErr != nil {
+			return cacheErrorMsg{err: portraitErr}
+		}
+		m.cache.Put(studentId, iconData, portraitData)
 
-			cached, ok := m.cache.Get(studentId)
-			if !ok {
-				return cacheErrorMsg{err: fmt.Errorf("cache miss after put")}
-			}
+		cached, ok := m.cache.Get(studentId)
+		if !ok {
+			return cacheErrorMsg{err: fmt.Errorf("cache miss after put")}
+		}
 
-			if err := updateFastfetchImage(cached.PortraitPath, m.height, m.termType, m.logoFormat); err != nil {
-				return cacheErrorMsg{err: err}
-			}
-			return cacheSuccessMsg{studentId: studentId, name: studentName}
-		},
-		tickDownload(),
-	)
+		if err := updateFastfetchImage(cached.PortraitPath, m.height, m.termType, m.logoFormat); err != nil {
+			return cacheErrorMsg{err: err}
+		}
+		return cacheSuccessMsg{studentId: studentId, name: studentName}
+	}
 }
 
 func (m model) selectInstalled(studentId int) tea.Cmd {

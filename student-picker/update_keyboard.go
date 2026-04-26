@@ -21,7 +21,6 @@ func (m model) handleModalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			studentId := m.modal.studentId
 			m.modal = modal{kind: modalNone}
 			m.isDownloading = true
-			m.downloadPct = 0
 			return m, m.cacheAndSelectWithBackup(studentId)
 		}
 		m.modal = modal{kind: modalNone}
@@ -100,7 +99,6 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		student := items[m.gridIdx]
 		if m.tab == TabBrowse {
 			m.isDownloading = true
-			m.downloadPct = 0
 			return m, m.cacheAndSelect(student.Id)
 		}
 		return m, m.selectInstalled(student.Id)

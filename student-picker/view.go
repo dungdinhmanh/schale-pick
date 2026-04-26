@@ -91,27 +91,22 @@ func (m model) renderHelpModal() string {
 }
 
 func (m model) viewMain() string {
-	// Standardized gridW calculation: Master Box(4) + Grid Box(2) + Middle Space(1) + PreviewW(40) = 47. Wait.
-	// Actually: MasterBorder(2) + MasterPadding(2) + GridBorder(2) + Space(1) + Preview(40) = 47.
-	// We use -9 to get the inner Grid content width nicely.
+	rows := m.visibleRows()
+	// gridBoxH = tab-line border(1) + rows*gridItemH + bottom border(1)
+	gridBoxH := 2 + rows*gridItemH
+
 	gridW := m.width - PreviewW - 9
 	if gridW < 16 {
 		gridW = 16
 	}
 
 	gridContent := m.renderList()
-	previewContent := m.renderPreview()
+	previewContent := m.renderPreview(gridBoxH)
 
 	leftContent := m.renderGridBoxWithTabs(gridContent, gridW)
 
 	// Body = Grid Box + Space + Preview Box
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftContent, " ", previewContent)
-
-	progressLine := ""
-	if m.isDownloading {
-		prog := renderProgressBar(m.downloadPct, 30)
-		progressLine = lipgloss.NewStyle().Foreground(lipgloss.Color("#89B4FA")).Render("Downloading: ") + prog
-	}
 
 	statusLine := ""
 	if m.status != "" {
@@ -132,8 +127,7 @@ func (m model) viewMain() string {
 	// Legend bar: show abbreviations used in current page
 	legendLine := m.renderLegendBar()
 
-	// Join everything vertically inside the Master Box
-	lines := []string{body, progressLine, statusLine, help}
+	lines := []string{body, statusLine, help}
 	if legendLine != "" {
 		lines = append(lines, legendLine)
 	}
@@ -144,58 +138,57 @@ func (m model) viewMain() string {
 
 func (m model) viewSettings() string {
 	cacheDir := CacheDir()
+	inner := m.width - 8 // masterBox border(2) + padding(2) + settingsBox border(2) + padding(2)
+	if inner < 20 {
+		inner = 20
+	}
+	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086"))
 
-	cfgLine := lipgloss.Style{}.Foreground(lipgloss.Color("#89B4FA")).Render("Cache: ") +
-		lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(cacheDir)
-
+	cfgLine := lipgloss.NewStyle().Foreground(lipgloss.Color("#89B4FA")).Render("Cache      ") + dim.Render(cacheDir)
 	cachedItems := m.cache.List()
-	statsLine := lipgloss.Style{}.Foreground(lipgloss.Color("#A6E3A1")).Render("Installed: ") +
-		lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(fmt.Sprintf("%d students", len(cachedItems)))
-
+	statsLine := lipgloss.NewStyle().Foreground(lipgloss.Color("#A6E3A1")).Render("Installed  ") + dim.Render(fmt.Sprintf("%d students", len(cachedItems)))
 	magickStatus := "not available"
 	if m.hasMagick {
 		magickStatus = "available"
 	}
-	magickLine := lipgloss.Style{}.Foreground(lipgloss.Color("#CBA6F7")).Render("ImageMagick: ") +
-		lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(magickStatus)
+	magickLine := lipgloss.NewStyle().Foreground(lipgloss.Color("#CBA6F7")).Render("ImageMagick") + dim.Render(" "+magickStatus)
+	termLine := lipgloss.NewStyle().Foreground(lipgloss.Color("#89B4FA")).Render("Terminal   ") + dim.Render(" "+m.termType)
 
-	termLine := lipgloss.Style{}.Foreground(lipgloss.Color("#89B4FA")).Render("Terminal: ") +
-		lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(m.termType)
-
-	infoBlock := lipgloss.JoinVertical(lipgloss.Left,
-		" "+cfgLine,
-		" "+statsLine,
-		" "+magickLine,
-		" "+termLine,
+	infoTitle := styleTitle.Render("  System Info")
+	infoBox := styleSettingsBorder.Width(inner).Render(
+		lipgloss.JoinVertical(lipgloss.Left,
+			infoTitle,
+			"  "+cfgLine,
+			"  "+statsLine,
+			"  "+magickLine,
+			"  "+termLine,
+		),
 	)
 
 	// Interactive Settings Section
-	var logoFormatRow string
-	logoLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("#CDD6F4")).Render("Logo Format: ")
-	kittyOption := "kitty"
-	rawOption := "raw"
-
+	logoLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("#CDD6F4")).Render("Logo Format  ")
+	var kittyOption, rawOption string
 	if m.logoFormat == "kitty" {
 		kittyOption = lipgloss.NewStyle().Foreground(lipgloss.Color("#A6E3A1")).Bold(true).Render("[kitty]")
-		rawOption = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(" raw ")
+		rawOption = dim.Render("  raw")
 	} else {
-		kittyOption = lipgloss.NewStyle().Foreground(lipgloss.Color("#6C7086")).Render(" kitty ")
+		kittyOption = dim.Render("kitty  ")
 		rawOption = lipgloss.NewStyle().Foreground(lipgloss.Color("#A6E3A1")).Bold(true).Render("[raw]")
 	}
-
-	logoFormatRow = lipgloss.JoinHorizontal(lipgloss.Left, logoLabel, kittyOption, " ", rawOption)
+	logoFormatRow := lipgloss.JoinHorizontal(lipgloss.Left, logoLabel, kittyOption, rawOption)
 	if m.settingsIdx == 0 {
-		logoFormatRow = lipgloss.NewStyle().Background(lipgloss.Color("#45475A")).Render(" > " + logoFormatRow)
+		logoFormatRow = lipgloss.NewStyle().Background(lipgloss.Color("#313244")).Render(" ▶ " + logoFormatRow + " ")
 	} else {
 		logoFormatRow = "   " + logoFormatRow
 	}
 
-	settingsTitleLine := renderBorderTitle(" Settings ", m.width-4)
-	contentBlock := settingsTitleLine + "\n" + styleSettingsBorder.Width(m.width-4).Render(
+	settingsTitle := styleTitle.Render("  Settings")
+	settingsBox := styleSettingsBorder.Width(inner).Render(
 		lipgloss.JoinVertical(lipgloss.Left,
-			logoFormatRow,
+			settingsTitle,
+			" "+logoFormatRow,
 			"",
-			"Use arrow keys to navigate and change values",
+			dim.Render("  ←/→ or h/l: change value"),
 		),
 	)
 
@@ -208,8 +201,8 @@ func (m model) viewSettings() string {
 		}
 	}
 
-	help := styleHelp.Render("q/b/esc/i: back | arrows: navigate | q: quit")
-	mainCol := lipgloss.JoinVertical(lipgloss.Left, infoBlock, "", contentBlock, statusLine, "", help)
+	help := styleHelp.Render("i/b/esc: back  |  ←/→: change  |  q: quit")
+	mainCol := lipgloss.JoinVertical(lipgloss.Left, infoBox, "", settingsBox, "", statusLine, help)
 	return styleMasterBox.Width(m.width - 4).Render(mainCol)
 }
 
@@ -453,13 +446,24 @@ func (m model) renderListItem(s Student, selected bool) string {
 	return border.Render(nameRendered)
 }
 
-func (m model) renderPreview() string {
+func (m model) renderPreview(containerH int) string {
+	// containerH is the total height including the border (2 lines)
+	innerH := containerH - 2
+	if innerH < 4 {
+		innerH = 4
+	}
+	// reserve 2 lines for name + spacer; rest is image area
+	imageH := innerH - 2
+	if imageH < 2 {
+		imageH = 2
+	}
+
 	items := m.getCurrentItems()
 
 	var content string
 	if len(items) == 0 || m.gridIdx >= len(items) {
 		content = lipgloss.NewStyle().
-			Width(PreviewW-2).Height(PreviewH-2).
+			Width(PreviewW-2).Height(innerH).
 			Align(lipgloss.Center, lipgloss.Center).
 			Foreground(lipgloss.Color("#6C7086")).
 			Render("No image")
@@ -474,13 +478,9 @@ func (m model) renderPreview() string {
 		}
 
 		imagePlaceholder := lipgloss.NewStyle().
-			Width(PreviewW-2).
-			Height(PreviewH-7).
+			Width(PreviewW - 2).
+			Height(imageH).
 			Align(lipgloss.Center, lipgloss.Center).
-			Render("")
-
-		spacer := lipgloss.NewStyle().
-			Height(1).
 			Render("")
 
 		nameTag := lipgloss.NewStyle().
@@ -490,7 +490,7 @@ func (m model) renderPreview() string {
 			Bold(true).
 			Render(fullName)
 
-		content = lipgloss.JoinVertical(lipgloss.Center, imagePlaceholder, spacer, nameTag)
+		content = lipgloss.JoinVertical(lipgloss.Center, imagePlaceholder, nameTag)
 	}
 
 	return lipgloss.NewStyle().
@@ -555,18 +555,3 @@ func (m model) renderLegendBar() string {
 	return styleHelp.Render("abbr: " + legend)
 }
 
-func renderProgressBar(pct float64, width int) string {
-	if pct > 1.0 {
-		pct = 1.0
-	}
-	filledW := int(float64(width) * pct)
-	if filledW < 0 {
-		filledW = 0
-	}
-	emptyW := width - filledW
-
-	filled := lipgloss.NewStyle().Foreground(lipgloss.Color("#A6E3A1")).Render(strings.Repeat("█", filledW))
-	empty := lipgloss.NewStyle().Foreground(lipgloss.Color("#45475A")).Render(strings.Repeat("░", emptyW))
-
-	return fmt.Sprintf("[%s%s] %d%%", filled, empty, int(pct*100))
-}
