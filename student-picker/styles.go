@@ -42,15 +42,11 @@ var (
 			Bold(true)
 
 	styleBtnActive = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#CDD6F4")).
-			Background(lipgloss.Color("#89B4FA")).
-			Padding(0, 2).
+			Foreground(lipgloss.Color("#A6E3A1")).
 			Bold(true)
 
 	styleBtnInactive = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#6C7086")).
-				Background(lipgloss.Color("#45475A")).
-				Padding(0, 2)
+				Foreground(lipgloss.Color("#6C7086"))
 
 	styleMasterBox = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
