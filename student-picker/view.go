@@ -119,9 +119,9 @@ func (m model) viewMain() string {
 
 	var help string
 	if m.searchMode {
-		help = styleHelp.Render("Type to search... | Enter: confirm | Esc: cancel")
+		help = styleHelp.Render("Type to search  |  Enter: confirm  |  Esc: cancel")
 	} else {
-		help = styleHelp.Render("j/k/↑↓: move | h/l/←→: left/right | /: search | Tab: switch | i: settings | ?: help | Enter: select | q: quit")
+		help = styleHelp.Render("Tab: switch  |  /: search  |  Enter: select  |  i: settings  |  ?: help  |  q: quit")
 	}
 
 	// Legend bar: show abbreviations used in current page
@@ -225,7 +225,7 @@ func (m model) viewSettings() string {
 			" "+cacheSizeRow,
 			" "+autoBackupRow,
 			"",
-			dim.Render("  ←/→ or h/l: change  |  ↑/↓ or j/k: navigate"),
+			dim.Render("  ←/→: change  |  ↑/↓: navigate"),
 		),
 	)
 
@@ -238,7 +238,7 @@ func (m model) viewSettings() string {
 		}
 	}
 
-	help := styleHelp.Render("i/b/esc: back  |  ←/→: change  |  q: quit")
+	help := styleHelp.Render("esc: back  |  q: quit")
 	mainCol := lipgloss.JoinVertical(lipgloss.Left, infoBox, "", settingsBox, "", statusLine, help)
 	return styleMasterBox.Width(m.width - 4).Render(mainCol)
 }

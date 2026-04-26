@@ -107,6 +107,13 @@ func drawImageWithID(img image.Image, x, y, w, h, imageID int) error {
 	if newH < 1 {
 		newH = 1
 	}
+	// Clamp so image never exceeds requested cell box (prevents bleed into next row)
+	if newW > w {
+		newW = w
+	}
+	if newH > h {
+		newH = h
+	}
 
 	xOff := (w - newW) / 2
 	yOff := (h - newH) / 2
@@ -275,8 +282,12 @@ func clearImagesTermimg() {
 	}
 	drawMu.Lock()
 	defer drawMu.Unlock()
-	// Delete all Kitty image placements without tearing down the terminal
-	_, _ = terminal.Printf("\x1b_Ga=d;\x1b\\")
+	// Delete the preview image placement using the same syntax that works in drawImageWithID.
+	// Sending generic "a=d" without an explicit d=A is interpreted inconsistently across
+	// terminals; targeting our specific image ID is reliable.
+	_, _ = terminal.Printf("\x1b_Ga=d,d=i,i=%d;\x1b\\", previewImageID)
+	// Also issue a delete-all (uppercase A frees data too) as a belt-and-suspenders.
+	_, _ = terminal.Printf("\x1b_Ga=d,d=A;\x1b\\")
 }
 
 func cleanupTermimg() {
