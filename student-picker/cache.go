@@ -112,6 +112,19 @@ func (c *Cache) Clear() error {
 	return nil
 }
 
+// SetMaxSize updates the max cache size and evicts oldest entries if needed
+func (c *Cache) SetMaxSize(n int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if n < 1 {
+		n = 1
+	}
+	c.maxSize = n
+	for len(c.order) > c.maxSize {
+		c.evictOldest()
+	}
+}
+
 func (c *Cache) moveToEnd(studentId int) {
 	for i, id := range c.order {
 		if id == studentId {

@@ -69,6 +69,8 @@ type model struct {
 	termType      string
 	logoFormat    string
 	settingsIdx   int
+	cacheSize     int
+	autoBackup    bool
 }
 
 func newModel() model {
@@ -82,6 +84,8 @@ func newModel() model {
 		loading:     true,
 		termType:    detectTerminalType(),
 		logoFormat:  "kitty",
+		cacheSize:   DefaultCacheSize,
+		autoBackup:  true,
 	}
 }
 
@@ -327,6 +331,15 @@ func (m *model) preCachePortraits() {
 
 func (m model) cacheAndSelect(studentId int) tea.Cmd {
 	return func() tea.Msg {
+		if m.autoBackup {
+			if fileExists(fastfetchConfigPath()) {
+				bakPath := fastfetchConfigPath() + backupSuffix
+				if err := copyFile(fastfetchConfigPath(), bakPath); err != nil {
+					return cacheErrorMsg{err: fmt.Errorf("backup failed: %w", err)}
+				}
+			}
+			return m.doCacheAndSelect(studentId)()
+		}
 		bakPath := fastfetchConfigPath() + backupSuffix
 		if !fileExists(bakPath) && fileExists(fastfetchConfigPath()) {
 			return showModalMsg{

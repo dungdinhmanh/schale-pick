@@ -138,7 +138,7 @@ func (m model) viewMain() string {
 
 func (m model) viewSettings() string {
 	cacheDir := CacheDir()
-	inner := m.width - 8 // masterBox border(2) + padding(2) + settingsBox border(2) + padding(2)
+	inner := m.width - 6 // masterBox border(2) + padding(2) + settingsBox border(2)
 	if inner < 20 {
 		inner = 20
 	}
@@ -169,20 +169,52 @@ func (m model) viewSettings() string {
 	)
 
 	// Interactive Settings Section
-	logoLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("#CDD6F4")).Render("Logo Format  ")
+	highlight := lipgloss.NewStyle().Background(lipgloss.Color("#313244"))
+	label := lipgloss.NewStyle().Foreground(lipgloss.Color("#CDD6F4"))
+	active := lipgloss.NewStyle().Foreground(lipgloss.Color("#A6E3A1")).Bold(true)
+
+	// Setting 0: Logo Format
+	logoLabel := label.Render("Logo Format  ")
 	var kittyOption, rawOption string
 	if m.logoFormat == "kitty" {
-		kittyOption = lipgloss.NewStyle().Foreground(lipgloss.Color("#A6E3A1")).Bold(true).Render("[kitty]")
+		kittyOption = active.Render("[kitty]")
 		rawOption = dim.Render("  raw")
 	} else {
 		kittyOption = dim.Render("kitty  ")
-		rawOption = lipgloss.NewStyle().Foreground(lipgloss.Color("#A6E3A1")).Bold(true).Render("[raw]")
+		rawOption = active.Render("[raw]")
 	}
 	logoFormatRow := lipgloss.JoinHorizontal(lipgloss.Left, logoLabel, kittyOption, rawOption)
 	if m.settingsIdx == 0 {
-		logoFormatRow = lipgloss.NewStyle().Background(lipgloss.Color("#313244")).Render(" ▶ " + logoFormatRow + " ")
+		logoFormatRow = highlight.Render(" ▶ " + logoFormatRow + " ")
 	} else {
 		logoFormatRow = "   " + logoFormatRow
+	}
+
+	// Setting 1: Cache Size
+	cacheSizeRow := label.Render("Cache Size   ") +
+		dim.Render("◀  ") + active.Render(fmt.Sprintf("%2d", m.cacheSize)) + dim.Render("  ▶") +
+		dim.Render(fmt.Sprintf("  (portraits kept on disk, 1–20)"))
+	if m.settingsIdx == 1 {
+		cacheSizeRow = highlight.Render(" ▶ " + cacheSizeRow + " ")
+	} else {
+		cacheSizeRow = "   " + cacheSizeRow
+	}
+
+	// Setting 2: Auto Backup
+	var backupOn, backupOff string
+	if m.autoBackup {
+		backupOn = active.Render("[on] ")
+		backupOff = dim.Render(" off")
+	} else {
+		backupOn = dim.Render(" on  ")
+		backupOff = active.Render("[off]")
+	}
+	autoBackupRow := label.Render("Auto Backup  ") + backupOn + backupOff +
+		dim.Render("  (backup fastfetch config before overwriting)")
+	if m.settingsIdx == 2 {
+		autoBackupRow = highlight.Render(" ▶ " + autoBackupRow + " ")
+	} else {
+		autoBackupRow = "   " + autoBackupRow
 	}
 
 	settingsTitle := styleTitle.Render("  Settings")
@@ -190,8 +222,10 @@ func (m model) viewSettings() string {
 		lipgloss.JoinVertical(lipgloss.Left,
 			settingsTitle,
 			" "+logoFormatRow,
+			" "+cacheSizeRow,
+			" "+autoBackupRow,
 			"",
-			dim.Render("  ←/→ or h/l: change value"),
+			dim.Render("  ←/→ or h/l: change  |  ↑/↓ or j/k: navigate"),
 		),
 	)
 
@@ -455,8 +489,8 @@ func (m model) renderPreview(containerH int) string {
 	if innerH < 4 {
 		innerH = 4
 	}
-	// reserve 1 line for name; rest is image area
-	imageH := innerH - 1
+	// reserve 2 rows (spacer + name tag) so the name never overlaps the image
+	imageH := innerH - 2
 	if imageH < 2 {
 		imageH = 2
 	}
@@ -499,7 +533,8 @@ func (m model) renderPreview(containerH int) string {
 			Bold(true).
 			Render(fullName)
 
-		content = lipgloss.JoinVertical(lipgloss.Center, imagePlaceholder, nameTag)
+		spacer := lipgloss.NewStyle().Width(PreviewW - 2).Height(1).Render("")
+		content = lipgloss.JoinVertical(lipgloss.Center, imagePlaceholder, spacer, nameTag)
 	}
 
 	return lipgloss.NewStyle().
