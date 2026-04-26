@@ -152,6 +152,9 @@ func (m model) viewSettings() string {
 		magickStatus = "available"
 	}
 	magickLine := lipgloss.NewStyle().Foreground(lipgloss.Color("#CBA6F7")).Render("ImageMagick") + dim.Render(" "+magickStatus)
+	if !m.hasMagick {
+		magickLine += "  " + lipgloss.NewStyle().Foreground(lipgloss.Color("#F38BA8")).Italic(true).Render("→ install: sudo pacman -S imagemagick  or  sudo apt install imagemagick")
+	}
 	termLine := lipgloss.NewStyle().Foreground(lipgloss.Color("#89B4FA")).Render("Terminal   ") + dim.Render(" "+m.termType)
 
 	infoTitle := styleTitle.Render("  System Info")
@@ -452,8 +455,8 @@ func (m model) renderPreview(containerH int) string {
 	if innerH < 4 {
 		innerH = 4
 	}
-	// reserve 2 lines for name + spacer; rest is image area
-	imageH := innerH - 2
+	// reserve 3 lines for name + spacer + bottom padding; rest is image area
+	imageH := innerH - 3
 	if imageH < 2 {
 		imageH = 2
 	}
