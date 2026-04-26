@@ -41,7 +41,10 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "i":
 		m.screen = screenSettings
 		m.status = ""
-		return m, nil
+		return m, func() tea.Msg {
+			clearImagesTermimg()
+			return nil
+		}
 
 	case "tab":
 		if m.tab == TabBrowse {
@@ -147,7 +150,7 @@ func (m model) handleSettingsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "b", "esc", "i":
 		m.screen = screenMain
 		m.status = ""
-		return m, nil
+		return m, m.scheduleRenderCmd()
 	case "up", "k":
 		if m.settingsIdx > 0 {
 			m.settingsIdx--

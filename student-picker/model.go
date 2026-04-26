@@ -200,8 +200,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case renderImagesMsg:
-		go m.renderImages()
-		return m, nil
+		return m, func() tea.Msg {
+			m.renderImages()
+			return nil
+		}
 	}
 	return m, nil
 }
