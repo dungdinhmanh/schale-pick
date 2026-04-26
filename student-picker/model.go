@@ -3,14 +3,16 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"charm.land/bubbletea/v2"
+	tea "charm.land/bubbletea/v2"
 )
 
 type Tab int
@@ -48,6 +50,7 @@ type model struct {
 	screen        screen
 	tab           Tab
 	manifest      []Student
+	manifestByID  map[int]Student
 	filtered      []Student
 	gridIdx       int
 	gridCols      int
@@ -147,9 +150,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.manifest = msg.students
 		m.filtered = msg.students
 		m.loading = false
+		// Build ID index for O(1) lookups
+		m.manifestByID = make(map[int]Student, len(msg.students))
+		for _, s := range msg.students {
+			m.manifestByID[s.Id] = s
+		}
 		if len(m.filtered) > 0 {
 			m.previewPath = getPortraitPath(m.filtered[0].Id)
-			// Save meta for offline use only if we got fresh data
 			if len(m.manifest) > 0 {
 				SaveMeta(m.manifest)
 			}
@@ -175,8 +182,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
 
 	case tea.KeyPressMsg:
-		// Skip repeat key events to prevent spamming
-		if msg.Key().IsRepeat {
+		// Block repeat for action keys; allow repeat for navigation
+		if msg.Key().IsRepeat && !isNavKey(msg.String()) {
 			return m, nil
 		}
 
@@ -224,10 +231,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.scheduleRenderCmd()
 
 	case renderImagesMsg:
-		m.renderImages()
+		go m.renderImages()
 		return m, nil
 	}
 	return m, nil
+}
+
+// isNavKey returns true for keys that should be repeatable (held down).
+func isNavKey(key string) bool {
+	switch key {
+	case "up", "down", "left", "right", "k", "j", "h", "l",
+		"pgup", "pgdown", "home", "end":
+		return true
+	}
+	return false
 }
 
 type statusClearMsg struct{}
@@ -295,11 +312,8 @@ func (m model) getInstalledItems() []Student {
 	cached := m.cache.List()
 	result := make([]Student, 0, len(cached))
 	for _, c := range cached {
-		for _, s := range m.manifest {
-			if s.Id == c.StudentId {
-				result = append(result, s)
-				break
-			}
+		if s, ok := m.manifestByID[c.StudentId]; ok {
+			result = append(result, s)
 		}
 	}
 	return result
@@ -384,20 +398,32 @@ func (m model) cacheAndSelectWithBackup(studentId int) tea.Cmd {
 	}
 }
 
-func (m *model) doCacheAndSelect(studentId int) tea.Cmd {
-	m.isDownloading = true
-	m.downloadPct = 0
+func (m model) doCacheAndSelect(studentId int) tea.Cmd {
 	student, _ := m.getStudent(studentId)
-	studentName := student.PersonalName
+	studentName := student.Name
+	if studentName == "" {
+		studentName = student.PersonalName
+	}
 	return tea.Batch(
 		func() tea.Msg {
-			iconData, err := m.downloader.DownloadIcon(studentId)
-			if err != nil {
-				return cacheErrorMsg{err: err}
+			var iconData, portraitData []byte
+			var iconErr, portraitErr error
+			var wg sync.WaitGroup
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				iconData, iconErr = m.downloader.DownloadIcon(studentId)
+			}()
+			go func() {
+				defer wg.Done()
+				portraitData, portraitErr = m.downloader.DownloadPortrait(studentId)
+			}()
+			wg.Wait()
+			if iconErr != nil {
+				return cacheErrorMsg{err: iconErr}
 			}
-			portraitData, err := m.downloader.DownloadPortrait(studentId)
-			if err != nil {
-				return cacheErrorMsg{err: err}
+			if portraitErr != nil {
+				return cacheErrorMsg{err: portraitErr}
 			}
 			m.cache.Put(studentId, iconData, portraitData)
 
@@ -430,10 +456,8 @@ func (m model) selectInstalled(studentId int) tea.Cmd {
 }
 
 func (m model) getStudent(id int) (Student, bool) {
-	for _, s := range m.manifest {
-		if s.Id == id {
-			return s, true
-		}
+	if s, ok := m.manifestByID[id]; ok {
+		return s, true
 	}
 	return Student{}, false
 }
@@ -567,8 +591,11 @@ func filterStudents(students []Student, query string) []Student {
 	result := []Student{}
 	lowerQuery := strings.ToLower(query)
 	for _, s := range students {
-		if strings.Contains(strings.ToLower(s.FamilyName), lowerQuery) ||
+		if strings.Contains(strings.ToLower(s.Name), lowerQuery) ||
+			strings.Contains(strings.ToLower(s.FamilyName), lowerQuery) ||
 			strings.Contains(strings.ToLower(s.PersonalName), lowerQuery) ||
+			strings.Contains(strings.ToLower(s.Base), lowerQuery) ||
+			strings.Contains(strings.ToLower(s.Variant), lowerQuery) ||
 			strings.Contains(strings.ToLower(strconv.Itoa(s.Id)), lowerQuery) {
 			result = append(result, s)
 		}
@@ -598,6 +625,7 @@ func fetchManifestCmd() tea.Msg {
 	}
 	students, err := parseManifest(data)
 	if err != nil {
+		log.Printf("parseManifest error: %v", err)
 		return manifestLoadedMsg{students: []Student{}}
 	}
 	return manifestLoadedMsg{students: students}
@@ -607,6 +635,9 @@ func parseManifest(data []byte) ([]Student, error) {
 	var students []Student
 	if err := json.Unmarshal(data, &students); err != nil {
 		return nil, err
+	}
+	for i := range students {
+		computeVariant(&students[i])
 	}
 	return students, nil
 }
@@ -672,7 +703,10 @@ func updateFastfetchImage(imagePath string, termLines int, termType string, logo
 	}
 
 	cmd := exec.Command("jq",
-		fmt.Sprintf(`.logo.source = "%s" | .logo.type = "%s" | .logo.width = %d`, imagePath, imgType, fastW),
+		"--arg", "source", imagePath,
+		"--arg", "itype", imgType,
+		"--argjson", "width", strconv.Itoa(fastW),
+		".logo.source = $source | .logo.type = $itype | .logo.width = $width",
 		configPath,
 	)
 	output, err := cmd.Output()

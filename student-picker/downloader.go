@@ -70,11 +70,22 @@ func (d *Downloader) DownloadIcon(id int) ([]byte, error) {
 	return d.DownloadImage(GetStudentIconURL(id))
 }
 
-// SaveMeta saves a lightweight mapping of ID to Name for offline use
+// metaEntry is the persistent format for offline meta storage.
+type metaEntry struct {
+	Name         string `json:"n"`
+	FamilyName   string `json:"f"`
+	PersonalName string `json:"p"`
+}
+
+// SaveMeta saves student metadata for offline use, preserving the full Name field.
 func SaveMeta(students []Student) error {
-	meta := make(map[int]string)
+	meta := make(map[int]metaEntry, len(students))
 	for _, s := range students {
-		meta[s.Id] = s.FamilyName + " " + s.PersonalName
+		meta[s.Id] = metaEntry{
+			Name:         s.Name,
+			FamilyName:   s.FamilyName,
+			PersonalName: s.PersonalName,
+		}
 	}
 	data, err := json.Marshal(meta)
 	if err != nil {
@@ -85,24 +96,58 @@ func SaveMeta(students []Student) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-// LoadMeta loads the lightweight mapping from cache
+// LoadMeta loads the lightweight mapping from cache.
+// Supports both new struct format (map[int]metaEntry) and old string format (map[int]string).
 func LoadMeta() ([]Student, error) {
 	path := filepath.Join(CacheDir(), "meta.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var meta map[int]string
-	if err := json.Unmarshal(data, &meta); err != nil {
+
+	// Try new struct format first
+	var metaNew map[int]metaEntry
+	if err := json.Unmarshal(data, &metaNew); err == nil && len(metaNew) > 0 {
+		// Validate it's actually the new format (has at least one non-empty Name or FamilyName)
+		isNew := false
+		for _, e := range metaNew {
+			if e.Name != "" || e.FamilyName != "" {
+				isNew = true
+				break
+			}
+		}
+		if isNew {
+			students := make([]Student, 0, len(metaNew))
+			for id, e := range metaNew {
+				s := Student{
+					Id:           id,
+					Name:         e.Name,
+					FamilyName:   e.FamilyName,
+					PersonalName: e.PersonalName,
+				}
+				computeVariant(&s)
+				students = append(students, s)
+			}
+			return students, nil
+		}
+	}
+
+	// Backwards compat: old format map[int]string "FamilyName PersonalName"
+	var metaOld map[int]string
+	if err := json.Unmarshal(data, &metaOld); err != nil {
 		return nil, err
 	}
-	students := make([]Student, 0, len(meta))
-	for id, name := range meta {
-		names := strings.SplitN(name, " ", 2)
-		fam, pers := "", ""
-		if len(names) > 0 { fam = names[0] }
-		if len(names) > 1 { pers = names[1] }
-		students = append(students, Student{Id: id, FamilyName: fam, PersonalName: pers})
+	students := make([]Student, 0, len(metaOld))
+	for id, name := range metaOld {
+		parts := strings.SplitN(name, " ", 2)
+		fam, pers := "", name
+		if len(parts) == 2 {
+			fam = parts[0]
+			pers = parts[1]
+		}
+		s := Student{Id: id, FamilyName: fam, PersonalName: pers}
+		computeVariant(&s)
+		students = append(students, s)
 	}
 	return students, nil
 }

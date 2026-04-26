@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/bubbletea/v2"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
@@ -72,14 +72,17 @@ func (m model) renderHelpModal() string {
 	content := []string{
 		title,
 		"",
-		"↑/↓/k/j : Navigate list",
-		"Enter   : Select & set as Fastfetch logo",
-		"Tab     : Switch between Browse/Installed",
-		"/       : Search students",
-		"i       : Open Settings",
-		"h       : Show this Help",
-		"q/Ctrl+C: Quit",
-		"Esc     : Back / Cancel",
+		"↑/k       : Move up",
+		"↓/j       : Move down",
+		"←/h       : Move left",
+		"→/l       : Move right",
+		"Enter     : Select & set as Fastfetch logo",
+		"Tab       : Switch between Browse/Installed",
+		"/         : Search students",
+		"i         : Open Settings",
+		"?         : Show this Help",
+		"q/Ctrl+C  : Quit",
+		"Esc       : Back / Cancel",
 		"",
 		lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("#6C7086")).Render("Press any key to close"),
 	}
@@ -104,6 +107,12 @@ func (m model) viewMain() string {
 	// Body = Grid Box + Space + Preview Box
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftContent, " ", previewContent)
 
+	progressLine := ""
+	if m.isDownloading {
+		prog := renderProgressBar(m.downloadPct, 30)
+		progressLine = lipgloss.NewStyle().Foreground(lipgloss.Color("#89B4FA")).Render("Downloading: ") + prog
+	}
+
 	statusLine := ""
 	if m.status != "" {
 		if m.statusIsErr {
@@ -113,20 +122,22 @@ func (m model) viewMain() string {
 		}
 	}
 
-	if m.isDownloading {
-		prog := renderProgressBar(m.downloadPct, 30)
-		statusLine = lipgloss.NewStyle().Foreground(lipgloss.Color("#89B4FA")).Render("Downloading: ") + prog
-	}
-
 	var help string
 	if m.searchMode {
 		help = styleHelp.Render("Type to search... | Enter: confirm | Esc: cancel")
 	} else {
-		help = styleHelp.Render("j/k: move | /: search | Tab: switch | i: settings | h: help | Enter: select | q: quit")
+		help = styleHelp.Render("j/k/↑↓: move | h/l/←→: left/right | /: search | Tab: switch | i: settings | ?: help | Enter: select | q: quit")
 	}
 
+	// Legend bar: show abbreviations used in current page
+	legendLine := m.renderLegendBar()
+
 	// Join everything vertically inside the Master Box
-	mainCol := lipgloss.JoinVertical(lipgloss.Left, body, statusLine, help)
+	lines := []string{body, progressLine, statusLine, help}
+	if legendLine != "" {
+		lines = append(lines, legendLine)
+	}
+	mainCol := lipgloss.JoinVertical(lipgloss.Left, lines...)
 
 	return styleMasterBox.Render(mainCol)
 }
@@ -250,7 +261,7 @@ func (m model) renderModalOverlay(bg string) string {
 	return placeOverlay(0, 0, overlay, bg, false)
 }
 
-func placeOverlay(x, y int, fg, bg string, shadow bool) string {
+func placeOverlay(x, y int, fg, bg string, _ bool) string {
 	fgLines := strings.Split(fg, "\n")
 	bgLines := strings.Split(bg, "\n")
 
@@ -305,7 +316,7 @@ func (m model) renderGridBoxWithTabs(content string, gridW int) string {
 	}
 	tabsLen := lipgloss.Width(tabsText)
 
-	targetWidth := gridW + 2
+	targetWidth := gridW + 4
 
 	remaining := targetWidth - tabsLen - 7
 	if remaining < 0 {
@@ -414,18 +425,19 @@ func (m model) renderListItem(s Student, selected bool) string {
 	}
 
 	listW := m.width - PreviewW - 9
+	if listW < 16 {
+		listW = 16
+	}
 	colWidth := listW / m.gridCols
-	if colWidth < 10 {
-		colWidth = 10
+	if colWidth < 4 {
+		colWidth = 4
 	}
 	innerW := colWidth - 2
-
-	name := s.PersonalName
-	runeCount := len([]rune(name))
-	if runeCount > innerW {
-		runes := []rune(name)
-		name = string(runes[:innerW-1]) + "…"
+	if innerW < 1 {
+		innerW = 1
 	}
+
+	name, _ := displayName(s, innerW)
 
 	nameRendered := lipgloss.NewStyle().
 		Width(innerW).
@@ -453,9 +465,12 @@ func (m model) renderPreview() string {
 			Render("No image")
 	} else {
 		student := items[m.gridIdx]
-		fullName := student.PersonalName
-		if student.FamilyName != "" {
-			fullName += " " + student.FamilyName
+		fullName := student.Name
+		if fullName == "" {
+			fullName = student.PersonalName
+			if student.FamilyName != "" {
+				fullName += " " + student.FamilyName
+			}
 		}
 
 		imagePlaceholder := lipgloss.NewStyle().
@@ -483,6 +498,63 @@ func (m model) renderPreview() string {
 		BorderForeground(lipgloss.Color("#A6E3A1")).
 		Render(content)
 }
+// renderLegendBar builds the abbr legend for variants visible on the current page.
+func (m model) renderLegendBar() string {
+	items := m.getCurrentItems()
+	if len(items) == 0 {
+		return ""
+	}
+
+	listW := m.width - PreviewW - 9
+	if listW < 16 {
+		listW = 16
+	}
+	colWidth := listW / m.gridCols
+	if colWidth < 4 {
+		colWidth = 4
+	}
+	innerW := colWidth - 2
+	if innerW < 1 {
+		innerW = 1
+	}
+
+	visibleRows := m.visibleRows()
+	startIdx := m.gridOffset * m.gridCols
+	endIdx := startIdx + visibleRows*m.gridCols
+	if endIdx > len(items) {
+		endIdx = len(items)
+	}
+
+	// Collect unique abbr→variant pairs where abbr was used
+	seen := map[string]string{}
+	for i := startIdx; i < endIdx; i++ {
+		s := items[i]
+		_, used := displayName(s, innerW)
+		if used && s.Abbr != "" && s.Variant != "" {
+			seen[s.Abbr] = s.Variant
+		}
+	}
+	if len(seen) == 0 {
+		return ""
+	}
+
+	parts := make([]string, 0, len(seen))
+	for abbr, variant := range seen {
+		parts = append(parts, abbr+"="+variant)
+	}
+	// stable sort for consistent output
+	for i := 0; i < len(parts)-1; i++ {
+		for j := i + 1; j < len(parts); j++ {
+			if parts[i] > parts[j] {
+				parts[i], parts[j] = parts[j], parts[i]
+			}
+		}
+	}
+
+	legend := strings.Join(parts, "  ")
+	return styleHelp.Render("abbr: " + legend)
+}
+
 func renderProgressBar(pct float64, width int) string {
 	if pct > 1.0 {
 		pct = 1.0
