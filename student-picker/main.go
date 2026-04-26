@@ -5,15 +5,15 @@ import (
 	"os"
 	"path/filepath"
 
-	"charm.land/bubbletea/v2"
+	tea "charm.land/bubbletea/v2"
 )
 
 func main() {
 	if f, err := tea.LogToFile("/tmp/debug.log", "debug"); err == nil {
 		defer f.Close()
 	}
-	m := newModel()
-	p := tea.NewProgram(m)
+
+	p := tea.NewProgram(newModel())
 
 	defer func() {
 		cleanupTermimg()
@@ -26,24 +26,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	fm := finalModel.(model)
-	if fm.status != "" && !fm.statusIsErr {
+	if fm, ok := finalModel.(model); ok && fm.status != "" && !fm.statusIsErr {
 		fmt.Println(fm.status)
 	}
 }
 
 func cleanupTempFiles() {
-	webpPattern := filepath.Join(os.TempDir(), "sp-icon-*.webp")
-	if matches, _ := filepath.Glob(webpPattern); matches != nil {
-		for _, f := range matches {
-			os.Remove(f)
-		}
-	}
-
-	pngPattern := filepath.Join(os.TempDir(), "sp-icon-*.png")
-	if matches, _ := filepath.Glob(pngPattern); matches != nil {
-		for _, f := range matches {
-			os.Remove(f)
+	for _, pat := range []string{"sp-icon-*.webp", "sp-icon-*.png"} {
+		if matches, _ := filepath.Glob(filepath.Join(os.TempDir(), pat)); matches != nil {
+			for _, f := range matches {
+				os.Remove(f)
+			}
 		}
 	}
 }
