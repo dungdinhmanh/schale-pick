@@ -65,11 +65,6 @@ func (d *Downloader) DownloadPortrait(id int) ([]byte, error) {
 	return d.DownloadImage(GetStudentPortraitURL(id))
 }
 
-// DownloadIcon downloads an icon image for a student
-func (d *Downloader) DownloadIcon(id int) ([]byte, error) {
-	return d.DownloadImage(GetStudentIconURL(id))
-}
-
 // metaEntry is the persistent format for offline meta storage.
 type metaEntry struct {
 	Name         string `json:"n"`

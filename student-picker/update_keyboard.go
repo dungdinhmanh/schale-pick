@@ -61,7 +61,7 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.gridIdx >= m.gridCols {
 			m.gridIdx -= m.gridCols
 			m.clampOffset()
-			return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
+			return m, m.scheduleRenderCmd()
 		}
 
 	case "down", "j":
@@ -69,14 +69,14 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.gridIdx+m.gridCols < len(items) {
 			m.gridIdx += m.gridCols
 			m.clampOffset()
-			return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
+			return m, m.scheduleRenderCmd()
 		}
 
 	case "left", "h":
 		if m.gridIdx > 0 {
 			m.gridIdx--
 			m.clampOffset()
-			return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
+			return m, m.scheduleRenderCmd()
 		}
 
 	case "right", "l":
@@ -84,7 +84,7 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.gridIdx < len(items)-1 {
 			m.gridIdx++
 			m.clampOffset()
-			return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
+			return m, m.scheduleRenderCmd()
 		}
 
 	case "/":

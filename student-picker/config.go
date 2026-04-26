@@ -8,7 +8,6 @@ import (
 // Schema URLs
 const (
 	SchemaURL       = "https://raw.githubusercontent.com/SchaleDB/SchaleDB/refs/heads/main/data/en/students.json"
-	IconBaseURL     = "https://raw.githubusercontent.com/SchaleDB/SchaleDB/main/images/student/icon"
 	PortraitBaseURL = "https://raw.githubusercontent.com/SchaleDB/SchaleDB/main/images/student/portrait"
 )
 
