@@ -160,13 +160,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		gridColsW := m.width - PreviewW - 9
-		if gridColsW < thumbW {
-			gridColsW = thumbW
+		listW := m.width - PreviewW - 9
+		if listW < 16 {
+			listW = 16
 		}
-		m.gridCols = gridColsW / thumbW
-		if m.gridCols < 1 {
-			m.gridCols = 1
+		colWidth := listW / m.gridCols
+		if colWidth < 10 {
+			m.gridCols = listW / 10
+			if m.gridCols < 1 {
+				m.gridCols = 1
+			}
 		}
 		m.clampOffset()
 		return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
@@ -281,7 +284,7 @@ func (m model) visibleRows() int {
 
 	availableHeight := m.height - masterBorder - titleLine - headerLine - statusLine - helpLine
 
-	rows := availableHeight / thumbH
+	rows := availableHeight / gridItemH
 	if rows < 1 {
 		rows = 1
 	}
@@ -384,6 +387,8 @@ func (m model) cacheAndSelectWithBackup(studentId int) tea.Cmd {
 func (m *model) doCacheAndSelect(studentId int) tea.Cmd {
 	m.isDownloading = true
 	m.downloadPct = 0
+	student, _ := m.getStudent(studentId)
+	studentName := student.PersonalName
 	return tea.Batch(
 		func() tea.Msg {
 			iconData, err := m.downloader.DownloadIcon(studentId)
@@ -404,7 +409,7 @@ func (m *model) doCacheAndSelect(studentId int) tea.Cmd {
 			if err := updateFastfetchImage(cached.PortraitPath, m.height, m.termType, m.logoFormat); err != nil {
 				return cacheErrorMsg{err: err}
 			}
-			return cacheSuccessMsg{studentId: studentId}
+			return cacheSuccessMsg{studentId: studentId, name: studentName}
 		},
 		tickDownload(),
 	)
@@ -499,36 +504,6 @@ func (m model) renderImages() {
 		return
 	}
 
-	visibleRows := m.visibleRows()
-	startRow := m.gridOffset
-	endRow := startRow + visibleRows
-
-	for row := startRow; row < endRow; row++ {
-		for col := 0; col < m.gridCols; col++ {
-			idx := row*m.gridCols + col
-			if idx >= len(items) {
-				continue
-			}
-
-			student := items[idx]
-			iconPath, ok := m.iconPaths[student.Id]
-			if !ok {
-				continue
-			}
-
-			visibleRow := row - m.gridOffset
-			// screenX = MasterBox(border 1 + padding 1) + GridBox(border 1 + padding 1) + col*thumbW + itemBorder(1)
-			gridX := 5 + col*thumbW
-			gridCellY := 3 + visibleRow*thumbH
-
-			iconY := gridCellY + 1
-			iconW := thumbW - 2
-			iconH := thumbH - 2
-
-			_ = renderImageTermimg(iconPath, gridX, iconY, iconW, iconH, true)
-		}
-	}
-
 	if m.gridIdx < 0 || m.gridIdx >= len(items) {
 		return
 	}
@@ -539,12 +514,12 @@ func (m model) renderImages() {
 		return
 	}
 
-	gridW := m.width - PreviewW - 9
-	if gridW < thumbW+4 {
-		gridW = thumbW + 4
+	listW := m.width - PreviewW - 9
+	if listW < 16 {
+		listW = 16
 	}
 
-	x := gridW + 6
+	x := listW + 6
 	y := 3
 	w, h := PreviewW-2, PreviewH-7
 

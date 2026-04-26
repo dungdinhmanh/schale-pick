@@ -21,8 +21,7 @@ import (
 // Kitty replaces placements with same image ID, eliminating flicker on re-render.
 // Use distinct IDs per region to ensure replacement, not layering.
 const (
-	previewImageID  = 100
-	gridIconFirstID = 200
+	previewImageID = 100
 )
 
 var (

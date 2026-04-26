@@ -72,7 +72,7 @@ func (m model) renderHelpModal() string {
 	content := []string{
 		title,
 		"",
-		"↑/↓/←/→ : Navigate grid",
+		"↑/↓/k/j : Navigate list",
 		"Enter   : Select & set as Fastfetch logo",
 		"Tab     : Switch between Browse/Installed",
 		"/       : Search students",
@@ -92,11 +92,11 @@ func (m model) viewMain() string {
 	// Actually: MasterBorder(2) + MasterPadding(2) + GridBorder(2) + Space(1) + Preview(40) = 47.
 	// We use -9 to get the inner Grid content width nicely.
 	gridW := m.width - PreviewW - 9
-	if gridW < thumbW {
-		gridW = thumbW
+	if gridW < 16 {
+		gridW = 16
 	}
 
-	gridContent := m.renderGrid()
+	gridContent := m.renderList()
 	previewContent := m.renderPreview()
 
 	leftContent := m.renderGridBoxWithTabs(gridContent, gridW)
@@ -122,7 +122,7 @@ func (m model) viewMain() string {
 	if m.searchMode {
 		help = styleHelp.Render("Type to search... | Enter: confirm | Esc: cancel")
 	} else {
-		help = styleHelp.Render("h/j/k/l: move | /: search | Tab: switch | i: settings | Enter: select | q: quit")
+		help = styleHelp.Render("j/k: move | /: search | Tab: switch | i: settings | h: help | Enter: select | q: quit")
 	}
 
 	// Join everything vertically inside the Master Box
@@ -350,58 +350,60 @@ func (m model) renderTabs() string {
 	return lipgloss.JoinHorizontal(lipgloss.Left, browse, installed)
 }
 
-func (m model) renderGrid() string {
+func (m model) renderList() string {
 	items := m.getCurrentItems()
 
-	// gridW must be the inner content width
-	gridW := m.width - PreviewW - 9
-	if gridW < thumbW {
-		gridW = thumbW
+	listW := m.width - PreviewW - 9
+	if listW < 16 {
+		listW = 16
 	}
 
 	if len(items) == 0 {
 		return lipgloss.NewStyle().
-			Width(thumbW*m.gridCols).
-			MaxWidth(gridW).
+			Width(listW).
 			Align(lipgloss.Center, lipgloss.Center).
 			Foreground(lipgloss.Color("#6C7086")).
 			Render("No students")
 	}
 
 	visibleRows := m.visibleRows()
-	startRow := m.gridOffset
-	endRow := startRow + visibleRows
-
-	totalRows := (len(items) + m.gridCols - 1) / m.gridCols
-	if endRow > totalRows {
-		endRow = totalRows
+	startIdx := m.gridOffset * m.gridCols
+	if startIdx >= len(items) {
+		startIdx = 0
+		m.gridOffset = 0
 	}
 
-	var lines []string
-
-	for row := startRow; row < endRow; row++ {
-		var rowItems []string
+	var rows []string
+	for row := 0; row < visibleRows; row++ {
+		var cols []string
 		for col := 0; col < m.gridCols; col++ {
-			idx := row*m.gridCols + col
+			idx := startIdx + row*m.gridCols + col
 			if idx >= len(items) {
-				rowItems = append(rowItems, strings.Repeat(" ", thumbW-2))
-			} else {
-				student := items[idx]
-				item := m.renderGridItem(student, idx == m.gridIdx)
-				rowItems = append(rowItems, item)
+				// Empty cell to fill the row
+				colWidth := listW / m.gridCols
+				if colWidth < 10 {
+					colWidth = 10
+				}
+				innerW := colWidth - 2
+				if innerW < 1 {
+					innerW = 1
+				}
+				cols = append(cols, lipgloss.NewStyle().Width(innerW).Render(""))
+				continue
 			}
+			cols = append(cols, m.renderListItem(items[idx], idx == m.gridIdx))
 		}
-		lines = append(lines, lipgloss.JoinHorizontal(lipgloss.Top, rowItems...))
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, cols...))
 	}
 
-	if len(lines) == 0 {
+	if len(rows) == 0 {
 		return ""
 	}
 
-	return strings.Join(lines, "\n")
+	return strings.Join(rows, "\n")
 }
 
-func (m model) renderGridItem(s Student, selected bool) string {
+func (m model) renderListItem(s Student, selected bool) string {
 	var borderColor, nameColor string
 	if selected {
 		borderColor = "#A6E3A1"
@@ -411,34 +413,32 @@ func (m model) renderGridItem(s Student, selected bool) string {
 		nameColor = "#CDD6F4"
 	}
 
-	innerW := thumbW - 2
-	innerH := thumbH - 2
+	listW := m.width - PreviewW - 9
+	colWidth := listW / m.gridCols
+	if colWidth < 10 {
+		colWidth = 10
+	}
+	innerW := colWidth - 2
 
 	name := s.PersonalName
-	maxNameLen := innerW - 2
-	if len(name) > maxNameLen {
-		name = name[:maxNameLen-1] + "…"
+	runeCount := len([]rune(name))
+	if runeCount > innerW {
+		runes := []rune(name)
+		name = string(runes[:innerW-1]) + "…"
 	}
 
-	var lines []string
-	for i := 0; i < innerH; i++ {
-		lines = append(lines, strings.Repeat(" ", innerW))
-	}
-
-	lines[innerH-1] = lipgloss.NewStyle().
+	nameRendered := lipgloss.NewStyle().
 		Width(innerW).
 		MaxWidth(innerW).
 		Align(lipgloss.Center).
 		Foreground(lipgloss.Color(nameColor)).
 		Render(name)
 
-	content := strings.Join(lines, "\n")
-
 	border := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(borderColor))
 
-	return border.Render(content)
+	return border.Render(nameRendered)
 }
 
 func (m model) renderPreview() string {

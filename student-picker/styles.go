@@ -3,8 +3,8 @@ package main
 import "charm.land/lipgloss/v2"
 
 const (
-	thumbW = 12
-	thumbH = 7
+	gridSpacing = 8 // 8px grid system: spacing between list items (cells)
+	gridItemH   = 3 // each list item height: border-top + text + border-bottom
 )
 
 var (

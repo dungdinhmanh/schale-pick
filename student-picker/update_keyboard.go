@@ -52,40 +52,26 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.gridOffset = 0
 		return m, nil
 
-	case "left":
+	case "left", "right", "l":
+		// No horizontal navigation in list view
+
+	case "h":
+		m.modal = modal{kind: modalHelp}
+		return m, nil
+
+	case "up", "k":
 		if m.gridIdx > 0 {
 			m.gridIdx--
 			m.clampOffset()
 			return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
 		}
 
-	case "h":
-		m.modal = modal{kind: modalHelp}
-		return m, nil
-
-	case "right", "l":
+	case "down", "j":
 		if m.gridIdx < len(m.getCurrentItems())-1 {
 			m.gridIdx++
 			m.clampOffset()
 			return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
 		}
-
-	case "up", "k":
-		m.gridIdx -= m.gridCols
-		if m.gridIdx < 0 {
-			m.gridIdx = 0
-		}
-		m.clampOffset()
-		return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
-
-	case "down", "j":
-		m.gridIdx += m.gridCols
-		maxIdx := len(m.getCurrentItems()) - 1
-		if m.gridIdx > maxIdx {
-			m.gridIdx = maxIdx
-		}
-		m.clampOffset()
-		return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
 
 	case "/":
 		m.searchMode = true
