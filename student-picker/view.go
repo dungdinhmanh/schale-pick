@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/bubbletea/v2"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
@@ -72,14 +72,17 @@ func (m model) renderHelpModal() string {
 	content := []string{
 		title,
 		"",
-		"↑/↓/←/→ : Navigate grid",
-		"Enter   : Select & set as Fastfetch logo",
-		"Tab     : Switch between Browse/Installed",
-		"/       : Search students",
-		"i       : Open Settings",
-		"h       : Show this Help",
-		"q/Ctrl+C: Quit",
-		"Esc     : Back / Cancel",
+		"↑/k       : Move up",
+		"↓/j       : Move down",
+		"←/h       : Move left",
+		"→/l       : Move right",
+		"Enter     : Select & set as Fastfetch logo",
+		"Tab       : Switch between Browse/Installed",
+		"/         : Search students",
+		"i         : Open Settings",
+		"?         : Show this Help",
+		"q/Ctrl+C  : Quit",
+		"Esc       : Back / Cancel",
 		"",
 		lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("#6C7086")).Render("Press any key to close"),
 	}
@@ -92,17 +95,23 @@ func (m model) viewMain() string {
 	// Actually: MasterBorder(2) + MasterPadding(2) + GridBorder(2) + Space(1) + Preview(40) = 47.
 	// We use -9 to get the inner Grid content width nicely.
 	gridW := m.width - PreviewW - 9
-	if gridW < thumbW {
-		gridW = thumbW
+	if gridW < 16 {
+		gridW = 16
 	}
 
-	gridContent := m.renderGrid()
+	gridContent := m.renderList()
 	previewContent := m.renderPreview()
 
 	leftContent := m.renderGridBoxWithTabs(gridContent, gridW)
 
 	// Body = Grid Box + Space + Preview Box
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftContent, " ", previewContent)
+
+	progressLine := ""
+	if m.isDownloading {
+		prog := renderProgressBar(m.downloadPct, 30)
+		progressLine = lipgloss.NewStyle().Foreground(lipgloss.Color("#89B4FA")).Render("Downloading: ") + prog
+	}
 
 	statusLine := ""
 	if m.status != "" {
@@ -113,20 +122,22 @@ func (m model) viewMain() string {
 		}
 	}
 
-	if m.isDownloading {
-		prog := renderProgressBar(m.downloadPct, 30)
-		statusLine = lipgloss.NewStyle().Foreground(lipgloss.Color("#89B4FA")).Render("Downloading: ") + prog
-	}
-
 	var help string
 	if m.searchMode {
 		help = styleHelp.Render("Type to search... | Enter: confirm | Esc: cancel")
 	} else {
-		help = styleHelp.Render("h/j/k/l: move | /: search | Tab: switch | i: settings | Enter: select | q: quit")
+		help = styleHelp.Render("j/k/↑↓: move | h/l/←→: left/right | /: search | Tab: switch | i: settings | ?: help | Enter: select | q: quit")
 	}
 
+	// Legend bar: show abbreviations used in current page
+	legendLine := m.renderLegendBar()
+
 	// Join everything vertically inside the Master Box
-	mainCol := lipgloss.JoinVertical(lipgloss.Left, body, statusLine, help)
+	lines := []string{body, progressLine, statusLine, help}
+	if legendLine != "" {
+		lines = append(lines, legendLine)
+	}
+	mainCol := lipgloss.JoinVertical(lipgloss.Left, lines...)
 
 	return styleMasterBox.Render(mainCol)
 }
@@ -250,7 +261,7 @@ func (m model) renderModalOverlay(bg string) string {
 	return placeOverlay(0, 0, overlay, bg, false)
 }
 
-func placeOverlay(x, y int, fg, bg string, shadow bool) string {
+func placeOverlay(x, y int, fg, bg string, _ bool) string {
 	fgLines := strings.Split(fg, "\n")
 	bgLines := strings.Split(bg, "\n")
 
@@ -305,7 +316,7 @@ func (m model) renderGridBoxWithTabs(content string, gridW int) string {
 	}
 	tabsLen := lipgloss.Width(tabsText)
 
-	targetWidth := gridW + 2
+	targetWidth := gridW + 4
 
 	remaining := targetWidth - tabsLen - 7
 	if remaining < 0 {
@@ -350,58 +361,60 @@ func (m model) renderTabs() string {
 	return lipgloss.JoinHorizontal(lipgloss.Left, browse, installed)
 }
 
-func (m model) renderGrid() string {
+func (m model) renderList() string {
 	items := m.getCurrentItems()
 
-	// gridW must be the inner content width
-	gridW := m.width - PreviewW - 9
-	if gridW < thumbW {
-		gridW = thumbW
+	listW := m.width - PreviewW - 9
+	if listW < 16 {
+		listW = 16
 	}
 
 	if len(items) == 0 {
 		return lipgloss.NewStyle().
-			Width(thumbW*m.gridCols).
-			MaxWidth(gridW).
+			Width(listW).
 			Align(lipgloss.Center, lipgloss.Center).
 			Foreground(lipgloss.Color("#6C7086")).
 			Render("No students")
 	}
 
 	visibleRows := m.visibleRows()
-	startRow := m.gridOffset
-	endRow := startRow + visibleRows
-
-	totalRows := (len(items) + m.gridCols - 1) / m.gridCols
-	if endRow > totalRows {
-		endRow = totalRows
+	startIdx := m.gridOffset * m.gridCols
+	if startIdx >= len(items) {
+		startIdx = 0
+		m.gridOffset = 0
 	}
 
-	var lines []string
-
-	for row := startRow; row < endRow; row++ {
-		var rowItems []string
+	var rows []string
+	for row := 0; row < visibleRows; row++ {
+		var cols []string
 		for col := 0; col < m.gridCols; col++ {
-			idx := row*m.gridCols + col
+			idx := startIdx + row*m.gridCols + col
 			if idx >= len(items) {
-				rowItems = append(rowItems, strings.Repeat(" ", thumbW-2))
-			} else {
-				student := items[idx]
-				item := m.renderGridItem(student, idx == m.gridIdx)
-				rowItems = append(rowItems, item)
+				// Empty cell to fill the row
+				colWidth := listW / m.gridCols
+				if colWidth < 10 {
+					colWidth = 10
+				}
+				innerW := colWidth - 2
+				if innerW < 1 {
+					innerW = 1
+				}
+				cols = append(cols, lipgloss.NewStyle().Width(innerW).Render(""))
+				continue
 			}
+			cols = append(cols, m.renderListItem(items[idx], idx == m.gridIdx))
 		}
-		lines = append(lines, lipgloss.JoinHorizontal(lipgloss.Top, rowItems...))
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, cols...))
 	}
 
-	if len(lines) == 0 {
+	if len(rows) == 0 {
 		return ""
 	}
 
-	return strings.Join(lines, "\n")
+	return strings.Join(rows, "\n")
 }
 
-func (m model) renderGridItem(s Student, selected bool) string {
+func (m model) renderListItem(s Student, selected bool) string {
 	var borderColor, nameColor string
 	if selected {
 		borderColor = "#A6E3A1"
@@ -411,34 +424,33 @@ func (m model) renderGridItem(s Student, selected bool) string {
 		nameColor = "#CDD6F4"
 	}
 
-	innerW := thumbW - 2
-	innerH := thumbH - 2
-
-	name := s.PersonalName
-	maxNameLen := innerW - 2
-	if len(name) > maxNameLen {
-		name = name[:maxNameLen-1] + "…"
+	listW := m.width - PreviewW - 9
+	if listW < 16 {
+		listW = 16
+	}
+	colWidth := listW / m.gridCols
+	if colWidth < 4 {
+		colWidth = 4
+	}
+	innerW := colWidth - 2
+	if innerW < 1 {
+		innerW = 1
 	}
 
-	var lines []string
-	for i := 0; i < innerH; i++ {
-		lines = append(lines, strings.Repeat(" ", innerW))
-	}
+	name, _ := displayName(s, innerW)
 
-	lines[innerH-1] = lipgloss.NewStyle().
+	nameRendered := lipgloss.NewStyle().
 		Width(innerW).
 		MaxWidth(innerW).
 		Align(lipgloss.Center).
 		Foreground(lipgloss.Color(nameColor)).
 		Render(name)
 
-	content := strings.Join(lines, "\n")
-
 	border := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(borderColor))
 
-	return border.Render(content)
+	return border.Render(nameRendered)
 }
 
 func (m model) renderPreview() string {
@@ -453,9 +465,12 @@ func (m model) renderPreview() string {
 			Render("No image")
 	} else {
 		student := items[m.gridIdx]
-		fullName := student.PersonalName
-		if student.FamilyName != "" {
-			fullName += " " + student.FamilyName
+		fullName := student.Name
+		if fullName == "" {
+			fullName = student.PersonalName
+			if student.FamilyName != "" {
+				fullName += " " + student.FamilyName
+			}
 		}
 
 		imagePlaceholder := lipgloss.NewStyle().
@@ -483,6 +498,63 @@ func (m model) renderPreview() string {
 		BorderForeground(lipgloss.Color("#A6E3A1")).
 		Render(content)
 }
+// renderLegendBar builds the abbr legend for variants visible on the current page.
+func (m model) renderLegendBar() string {
+	items := m.getCurrentItems()
+	if len(items) == 0 {
+		return ""
+	}
+
+	listW := m.width - PreviewW - 9
+	if listW < 16 {
+		listW = 16
+	}
+	colWidth := listW / m.gridCols
+	if colWidth < 4 {
+		colWidth = 4
+	}
+	innerW := colWidth - 2
+	if innerW < 1 {
+		innerW = 1
+	}
+
+	visibleRows := m.visibleRows()
+	startIdx := m.gridOffset * m.gridCols
+	endIdx := startIdx + visibleRows*m.gridCols
+	if endIdx > len(items) {
+		endIdx = len(items)
+	}
+
+	// Collect unique abbr→variant pairs where abbr was used
+	seen := map[string]string{}
+	for i := startIdx; i < endIdx; i++ {
+		s := items[i]
+		_, used := displayName(s, innerW)
+		if used && s.Abbr != "" && s.Variant != "" {
+			seen[s.Abbr] = s.Variant
+		}
+	}
+	if len(seen) == 0 {
+		return ""
+	}
+
+	parts := make([]string, 0, len(seen))
+	for abbr, variant := range seen {
+		parts = append(parts, abbr+"="+variant)
+	}
+	// stable sort for consistent output
+	for i := 0; i < len(parts)-1; i++ {
+		for j := i + 1; j < len(parts); j++ {
+			if parts[i] > parts[j] {
+				parts[i], parts[j] = parts[j], parts[i]
+			}
+		}
+	}
+
+	legend := strings.Join(parts, "  ")
+	return styleHelp.Render("abbr: " + legend)
+}
+
 func renderProgressBar(pct float64, width int) string {
 	if pct > 1.0 {
 		pct = 1.0

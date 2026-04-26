@@ -1,6 +1,6 @@
 package main
 
-import "charm.land/bubbletea/v2"
+import tea "charm.land/bubbletea/v2"
 
 func (m model) handleModalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -20,6 +20,8 @@ func (m model) handleModalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.modal.activeBtn == 0 {
 			studentId := m.modal.studentId
 			m.modal = modal{kind: modalNone}
+			m.isDownloading = true
+			m.downloadPct = 0
 			return m, m.cacheAndSelectWithBackup(studentId)
 		}
 		m.modal = modal{kind: modalNone}
@@ -52,40 +54,39 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.gridOffset = 0
 		return m, nil
 
-	case "left":
+	case "?":
+		m.modal = modal{kind: modalHelp}
+		return m, nil
+
+	case "up", "k":
+		if m.gridIdx >= m.gridCols {
+			m.gridIdx -= m.gridCols
+			m.clampOffset()
+			return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
+		}
+
+	case "down", "j":
+		items := m.getCurrentItems()
+		if m.gridIdx+m.gridCols < len(items) {
+			m.gridIdx += m.gridCols
+			m.clampOffset()
+			return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
+		}
+
+	case "left", "h":
 		if m.gridIdx > 0 {
 			m.gridIdx--
 			m.clampOffset()
 			return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
 		}
 
-	case "h":
-		m.modal = modal{kind: modalHelp}
-		return m, nil
-
 	case "right", "l":
-		if m.gridIdx < len(m.getCurrentItems())-1 {
+		items := m.getCurrentItems()
+		if m.gridIdx < len(items)-1 {
 			m.gridIdx++
 			m.clampOffset()
 			return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
 		}
-
-	case "up", "k":
-		m.gridIdx -= m.gridCols
-		if m.gridIdx < 0 {
-			m.gridIdx = 0
-		}
-		m.clampOffset()
-		return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
-
-	case "down", "j":
-		m.gridIdx += m.gridCols
-		maxIdx := len(m.getCurrentItems()) - 1
-		if m.gridIdx > maxIdx {
-			m.gridIdx = maxIdx
-		}
-		m.clampOffset()
-		return m, tea.Batch(m.scheduleRenderCmd(), m.getVisibleIconBatch())
 
 	case "/":
 		m.searchMode = true
@@ -98,6 +99,8 @@ func (m model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		student := items[m.gridIdx]
 		if m.tab == TabBrowse {
+			m.isDownloading = true
+			m.downloadPct = 0
 			return m, m.cacheAndSelect(student.Id)
 		}
 		return m, m.selectInstalled(student.Id)
