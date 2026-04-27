@@ -1,106 +1,131 @@
 # student-picker
 
-TUI chọn ảnh học sinh cho fastfetch, render preview bằng Kitty Graphics Protocol.
-
-## Cấu trúc thư mục
-
-```
-~/students/
-├── students.txt     # danh sách (tùy chọn)
-├── HS001.jpg
-├── HS002.jpg
-├── HS003.png
-└── ...
-```
-
-### Format students.txt
+A terminal UI for swapping the [fastfetch](https://github.com/fastfetch-cli/fastfetch) logo
+with a Blue Archive student portrait. Browse the full SchaleDB roster, preview portraits
+inline using the Kitty Graphics Protocol, and rewrite your fastfetch `config.jsonc` with one
+keystroke.
 
 ```
-# Dòng bắt đầu bằng # là comment
-HS001|Nguyễn Văn A
-HS002|Trần Thị B
-HS003|Lê Văn C
+┌─────────── Browse / Installed ───────────┐  ┌── Preview ──┐
+│  Aru     Akari    Akane    Aki    Ako    │  │             │
+│  Arisu   Asuna    Atsuko   Ayane  Azusa  │  │   [image]   │
+│ ▶Cherino  Chihiro  Chinatsu Chise Chiyo  │  │             │
+│  ...                                     │  │  Cherino    │
+└──────────────────────────────────────────┘  └─────────────┘
 ```
 
-Nếu không có file này, app tự scan thư mục và dùng mã số làm tên.
+## Features
 
-## Build & Cài đặt
+- **Live preview** via Kitty Graphics Protocol (also degrades to `raw` for non-Kitty terminals).
+- **Two-pane layout**: searchable grid on the left, portrait preview on the right.
+- **Online + offline**: portraits are downloaded once from SchaleDB and cached locally.
+- **LRU cache** with a configurable size limit (no unbounded disk growth).
+- **Auto-backup**: your existing `config.jsonc` is copied to `.bak` on first write.
+- **Surgical config patches**: only `.logo.source`, `.logo.type`, `.logo.width`, and
+  `.logo.padding.left` are modified — the rest of your fastfetch config is left intact.
+- **Settings screen**: change cache size, toggle auto-backup, switch logo format on the fly.
+
+## Requirements
+
+| Tool         | Why                                                          |
+|--------------|--------------------------------------------------------------|
+| Go ≥ 1.23    | Build the binary.                                            |
+| `fastfetch`  | The whole point.                                             |
+| `jq`         | Used to surgically patch `~/.config/fastfetch/config.jsonc`. |
+| `magick`     | (ImageMagick) Used to read portrait dimensions for sizing.   |
+| Kitty / WezTerm / Konsole / Ghostty | Recommended for inline preview rendering. Other terminals fall back gracefully. |
+
+On Arch / CachyOS:
 
 ```bash
-git clone <repo>
+sudo pacman -S fastfetch jq imagemagick
+```
+
+On Debian / Ubuntu:
+
+```bash
+sudo apt install fastfetch jq imagemagick
+```
+
+## Install
+
+```bash
+go install github.com/dungdinhmanh/student-picker@latest
+```
+
+Or from source:
+
+```bash
+git clone https://github.com/dungdinhmanh/student-picker
 cd student-picker
-go mod tidy
 go build -o student-picker .
-
-# Cài vào PATH
-sudo mv student-picker /usr/local/bin/
-# hoặc
-mv student-picker ~/.local/bin/
+sudo install -m 0755 student-picker /usr/local/bin/
 ```
 
-## Cấu hình
+## Usage
 
-Sửa các hằng số đầu file `main.go` nếu cần:
-
-```go
-const (
-    imageDir        = "$HOME/students"           // thư mục ảnh
-    studentListFile = "$HOME/students/students.txt"
-    fastfetchConfig = "$HOME/.config/fastfetch/config.jsonc"
-    previewW        = 38  // chiều rộng preview (cell)
-    previewH        = 22  // chiều cao preview (cell)
-)
+```bash
+student-picker
 ```
 
-## Yêu cầu
+| Key           | Action                                            |
+|---------------|---------------------------------------------------|
+| `←`/`→`/`h`/`l` | Move cursor left/right                          |
+| `↑`/`↓`/`k`/`j` | Move cursor up/down                             |
+| `Tab`           | Switch between **Browse** and **Installed** tabs |
+| `/`             | Search by name                                  |
+| `Enter`         | Select student → patch fastfetch config         |
+| `i`             | Open settings                                   |
+| `?`             | Help                                            |
+| `q` / `Ctrl+C`  | Quit                                            |
 
-- **Kitty terminal** (máy phụ CachyOS đã có ✓)
-- Go ≥ 1.22
-- fastfetch với config.jsonc có key `logo.source`
+## How it patches your config
 
-## Phím tắt
+When you press `Enter`, the app runs:
 
-| Phím | Chức năng |
-|------|-----------|
-| ↑ / ↓ / k / j | Di chuyển danh sách |
-| ← / → / h / l | Di chuyển ngang trong Grid |
-| / | Tìm kiếm theo tên / mã số |
-| Tab | Chuyển đổi Browse / Installed |
-| h | Hiện bảng trợ giúp (Help Modal) |
-| i | Xem thông tin chi tiết / Cài đặt |
-| Enter | Chọn & lưu vào fastfetch config |
-| q / Ctrl+C | Thoát không lưu |
-
-## Tính năng nổi bật
-
-- **Offline Mode**: Tự động lưu cache và mapping thông tin học sinh để dùng khi không có mạng.
-- **2-Pane Layout**: Hiển thị song song Grid danh sách và Preview chân dung học sinh.
-- **Progress Bar**: Theo dõi tiến trình tải ảnh chân dung thời gian thực.
-- **Auto Fallback**: Tự động phát hiện terminal và chọn phương thức render ảnh (Kitty/Sixel/Raw) phù hợp nhất.
-
-## Fastfetch config mẫu
-
-```jsonc
-{
-  // config.jsonc
-  "logo": {
-    "source": "/home/user/students/HS001.jpg",
-    "type": "kitty",
-    "width": 30,
-    "height": 15
-  },
-  "modules": [
-    "title",
-    "os",
-    "kernel",
-    "uptime"
-  ]
-}
+```bash
+jq --arg source <portrait-path> \
+   --arg itype  <kitty|raw> \
+   --argjson width <calculated> \
+   '.logo.source   = $source
+  | .logo.type     = $itype
+  | .logo.width    = $width
+  | .logo.padding.left = 2' \
+   ~/.config/fastfetch/config.jsonc
 ```
 
-## Lưu ý Kitty rendering
+Only those four fields change. Your modules, separators, colors, and any other custom
+fields are preserved. A `.bak` is written on first run if auto-backup is enabled
+(default: on).
 
-App dùng Kitty Graphics Protocol với `t=f` (file path transfer):
-- Kitty đọc file ảnh trực tiếp — không cần base64 encode toàn bộ data
-- Ảnh xóa tự động khi thoát (`a=d,d=A`)
-- Nếu ảnh không hiển thị: kiểm tra `$TERM` = `xterm-kitty`
+## Cache layout
+
+```
+~/.cache/student-picker/
+├── students.json          # SchaleDB roster (refetched on startup)
+├── meta.json              # cache metadata (LRU order, paths)
+└── <student-id>.webp      # cached portraits
+```
+
+Default cache size is 5 portraits; configurable from the settings screen (1–20).
+
+## Settings
+
+| Setting       | Values        | Default | Notes |
+|---------------|---------------|---------|-------|
+| Logo Format   | `kitty`/`raw` | auto    | `kitty` uses graphics protocol; `raw` falls back to ANSI block art. |
+| Cache Size    | 1–20          | 5       | LRU eviction once limit is hit. |
+| Auto Backup   | on / off      | on      | Skips the backup-confirmation modal when on. |
+
+## Contributing
+
+Issues and PRs welcome. The codebase is small (~3k LOC) and uses
+[Bubble Tea v2](https://github.com/charmbracelet/bubbletea) +
+[Lipgloss v2](https://github.com/charmbracelet/lipgloss).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+Portrait artwork is © Yostar / Nexon and served via [SchaleDB](https://schale.gg/).
+This project only links to those images; it does not redistribute them.
