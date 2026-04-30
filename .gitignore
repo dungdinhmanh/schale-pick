@@ -1,6 +1,5 @@
 # Binaries
 /student-picker
-/student-picker-bin
 *.exe
 *.exe~
 *.dll
@@ -12,13 +11,9 @@
 
 # Coverage
 *.out
-coverage.txt
 
 # Runtime cache & logs
 /cache/
-log
-debug.log
-/tmp/debug.log
 *.log
 
 # Backup files
@@ -26,11 +21,8 @@ debug.log
 *.bak
 
 # Editor / IDE
-.vscode/
-.idea/
 *.swp
 *~
-.DS_Store
 
 # Go workspace files
 go.work
