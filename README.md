@@ -167,5 +167,5 @@ The codebase is small (~3k LOC) and uses [Bubble Tea v2](https://github.com/char
 
 MIT — see [LICENSE](LICENSE).
 
-Portrait artwork is © Yostar / Nexon and served via [SchaleDB](https://schale.gg/).
+Portrait artwork is © Yostar / Nexon and served via [SchaleDB](https://schaledb.com/home).
 This project only links to those images; it does not redistribute them.
