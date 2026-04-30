@@ -3,6 +3,8 @@ name: Bug Report
 about: Something is broken or behaving unexpectedly.
 title: 'fix: '
 labels: bug
+assignees: ''
+
 ---
 
 ## What happened?
