@@ -5,14 +5,7 @@ with a Blue Archive student portrait. Browse the full SchaleDB roster, preview p
 inline using the Kitty Graphics Protocol, and rewrite your fastfetch `config.jsonc` with one
 keystroke.
 
-```
-┌─────────── Browse / Installed ───────────┐  ┌── Preview ──┐
-│  Aru     Akari    Akane    Aki    Ako    │  │             │
-│  Arisu   Asuna    Atsuko   Ayane  Azusa  │  │   [image]   │
-│ ▶Cherino  Chihiro  Chinatsu Chise Chiyo  │  │             │
-│  ...                                     │  │  Cherino    │
-└──────────────────────────────────────────┘  └─────────────┘
-```
+![student-picker](.github/screenshot.png)
 
 ## Features
 

@@ -319,9 +319,7 @@ func (m *model) preCachePortraits() {
 		studentId := items[m.gridIdx].Id
 		data, err := m.downloader.DownloadPortrait(studentId)
 		if err == nil {
-			portraitPath := filepath.Join(CacheDir(), "portrait", strconv.Itoa(studentId)+".webp")
-			os.MkdirAll(filepath.Dir(portraitPath), 0755)
-			os.WriteFile(portraitPath, data, 0644)
+			m.cache.Put(studentId, data)
 		}
 	}
 }
@@ -374,7 +372,9 @@ func (m model) doCacheAndSelect(studentId int) tea.Cmd {
 		if err != nil {
 			return cacheErrorMsg{err: err}
 		}
-		m.cache.Put(studentId, portraitData)
+		if err := m.cache.Put(studentId, portraitData); err != nil {
+			return cacheErrorMsg{err: fmt.Errorf("cache write failed: %w", err)}
+		}
 
 		cached, ok := m.cache.Get(studentId)
 		if !ok {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,16 +29,25 @@ func NewDownloader(maxConcurrent int) *Downloader {
 	}
 }
 
-// DownloadImage downloads an image from url and returns bytes
-func (d *Downloader) DownloadImage(url string) ([]byte, error) {
+// DownloadImage downloads an image from rawURL and returns bytes
+func (d *Downloader) DownloadImage(rawURL string) ([]byte, error) {
 	// Acquire semaphore
 	d.semaphore <- struct{}{}
 	defer func() { <-d.semaphore }()
 
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid url %q: %w", rawURL, err)
+	}
+	if parsed.Scheme != "https" && parsed.Scheme != "http" {
+		return nil, fmt.Errorf("invalid url scheme %q", parsed.Scheme)
+	}
+	parsed.RawPath = ""
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

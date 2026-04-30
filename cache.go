@@ -69,12 +69,17 @@ func (c *Cache) Put(studentId int, portraitData []byte) error {
 	}
 
 	// Add to cache
+	_, alreadyCached := c.items[studentId]
 	c.items[studentId] = CachedImage{
 		StudentId:    studentId,
 		PortraitPath: portraitPath,
 		CachedAt:     time.Now(),
 	}
-	c.order = append(c.order, studentId)
+	if alreadyCached {
+		c.moveToEnd(studentId)
+	} else {
+		c.order = append(c.order, studentId)
+	}
 
 	// Evict if over max size
 	if len(c.order) > c.maxSize {
