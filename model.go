@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -507,7 +506,7 @@ func fetchManifestCmd() tea.Msg {
 	}
 	students, err := parseManifest(data)
 	if err != nil {
-		log.Printf("parseManifest error: %v", err)
+		debugLog.Printf("parseManifest error: %v", err)
 		return manifestLoadedMsg{students: []Student{}}
 	}
 	return manifestLoadedMsg{students: students}
