@@ -38,21 +38,23 @@ keystroke.
 > **Note:** `~/.config/fastfetch/config.jsonc` must already exist and contain a `"logo": {}` block.
 > Run `fastfetch --gen-config` once if you haven't already.
 
-On Arch / CachyOS:
+Install the **runtime dependencies** (not the app — see [Install](#install) below):
 
+**Arch / Arch-based** (Manjaro, EndeavourOS, CachyOS, …)
 ```bash
 sudo pacman -S fastfetch jq imagemagick
 ```
 
-On Debian / Ubuntu:
-
+**Debian / Ubuntu-based** (Mint, Pop!_OS, …)
 ```bash
 sudo apt install fastfetch jq imagemagick
 ```
 
 ## Install
 
-### Pre-built binary (recommended for Arch / CachyOS)
+> `student-picker` is not yet on the AUR. Install via the pre-built binary below.
+
+### Pre-built binary (recommended)
 
 Download the latest release from the [Releases page](https://github.com/YOUR_USERNAME/student-picker/releases/latest):
 
