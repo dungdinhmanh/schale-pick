@@ -36,5 +36,6 @@ debug.log
 go.work
 go.work.sum
 
-# Graphify cache (regenerated)
-graphify-out/cache/
+# Dev / tooling output (not for end users)
+docs/
+graphify-out/
