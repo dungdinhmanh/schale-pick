@@ -52,19 +52,39 @@ sudo apt install fastfetch jq imagemagick
 
 ## Install
 
-**From source** (replace `YOUR_USERNAME` with your GitHub username after publishing):
+### Pre-built binary (recommended for Arch / CachyOS)
+
+Download the latest release from the [Releases page](https://github.com/YOUR_USERNAME/student-picker/releases/latest):
+
+```bash
+# Linux x86_64
+curl -L https://github.com/YOUR_USERNAME/student-picker/releases/latest/download/student-picker-linux-amd64 \
+  -o student-picker
+chmod +x student-picker
+sudo mv student-picker /usr/local/bin/
+```
+
+```bash
+# Linux ARM64
+curl -L https://github.com/YOUR_USERNAME/student-picker/releases/latest/download/student-picker-linux-arm64 \
+  -o student-picker
+chmod +x student-picker
+sudo mv student-picker /usr/local/bin/
+```
+
+Verify the checksum:
+
+```bash
+sha256sum -c student-picker-linux-amd64.sha256
+```
+
+### From source
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/student-picker
 cd student-picker
 go build -o student-picker .
 sudo install -m 0755 student-picker /usr/local/bin/
-```
-
-Or via `go install` once the module path is set:
-
-```bash
-go install github.com/YOUR_USERNAME/student-picker@latest
 ```
 
 ## Usage

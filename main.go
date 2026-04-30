@@ -11,7 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-const version = "0.1.0"
+var version = "0.1.0" // overridden at build time via -ldflags "-X main.version=vX.Y.Z"
 
 // debugLog discards all output by default.
 // Reassigned to a real logger when --debug is passed.
