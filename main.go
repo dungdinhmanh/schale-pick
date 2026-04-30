@@ -1,16 +1,31 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
 )
 
+// debugLog discards all output by default.
+// Reassigned to a real logger when --debug is passed.
+var debugLog = log.New(io.Discard, "", log.LstdFlags)
+
 func main() {
-	if os.Getenv("STUDENT_PICKER_DEBUG") == "1" {
-		if f, err := tea.LogToFile("/tmp/student-picker-debug.log", "debug"); err == nil {
+	debug := flag.Bool("debug", false, "write debug log to /tmp/student-picker-debug.log")
+	flag.Parse()
+
+	if *debug {
+		f, err := os.OpenFile("/tmp/student-picker-debug.log", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err == nil {
+			debugLog = log.New(f, "", log.LstdFlags)
+			if lf, lerr := tea.LogToFile("/tmp/student-picker-debug.log", "bubbletea"); lerr == nil {
+				defer lf.Close()
+			}
 			defer f.Close()
 		}
 	}
