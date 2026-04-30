@@ -28,7 +28,7 @@ Thank you for taking the time to contribute! Please read this guide before openi
 **Fork & clone**
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/student-picker
+git clone https://github.com/dungdinhmanh/student-picker
 cd student-picker
 go build .
 ```
