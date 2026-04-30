@@ -1,0 +1,76 @@
+package main
+
+import "charm.land/lipgloss/v2"
+
+const (
+	gridSpacing = 8 // 8px grid system: spacing between list items (cells)
+	gridItemH   = 3 // each list item height: border-top + text + border-bottom
+)
+
+var (
+	styleGridBorder = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#89B4FA"))
+
+	stylePreviewBorder = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("#A6E3A1"))
+
+	styleSettingsBorder = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("#CBA6F7"))
+
+	styleModalBorder = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("#F38BA8")).
+				Padding(1, 2)
+
+	styleHelp = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#6C7086")).
+			Italic(true)
+
+	styleSuccess = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#A6E3A1")).
+			Bold(true)
+
+	styleError = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#F38BA8")).
+			Bold(true)
+
+	styleTitle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#89B4FA")).
+			Bold(true)
+
+	styleBtnActive = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#A6E3A1")).
+			Bold(true)
+
+	styleBtnInactive = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#6C7086"))
+
+	styleMasterBox = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#CBA6F7")).
+			Padding(0, 1).
+			MarginTop(1)
+
+	styleSearchBar = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#89B4FA")).
+			Padding(0, 1)
+	
+	styleSubTitle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FAB387")).
+			Bold(true).
+			MarginTop(1)
+
+	styleSettingSelected = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#1E1E2E")).
+				Background(lipgloss.Color("#A6E3A1")).
+				Padding(0, 1).
+				Bold(true)
+
+	styleSettingNormal = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#CDD6F4")).
+				Padding(0, 1)
+)

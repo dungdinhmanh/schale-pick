@@ -1,0 +1,41 @@
+# Binaries
+/student-picker
+/student-picker-bin
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Coverage
+*.out
+coverage.txt
+
+# Runtime cache & logs
+/cache/
+log
+debug.log
+/tmp/debug.log
+*.log
+
+# Backup files
+*.orig
+*.bak
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Dev / tooling output (not for end users)
+docs/
+graphify-out/
