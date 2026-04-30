@@ -158,9 +158,10 @@ Default cache size is 5 portraits; configurable from the settings screen (1–20
 
 ## Contributing
 
-Issues and PRs welcome. The codebase is small (~3k LOC) and uses
-[Bubble Tea v2](https://github.com/charmbracelet/bubbletea) +
-[Lipgloss v2](https://github.com/charmbracelet/lipgloss).
+Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) and [Semantic Versioning](https://semver.org/).
+The codebase is small (~3k LOC) and uses [Bubble Tea v2](https://github.com/charmbracelet/bubbletea) + [Lipgloss v2](https://github.com/charmbracelet/lipgloss).
 
 ## License
 
