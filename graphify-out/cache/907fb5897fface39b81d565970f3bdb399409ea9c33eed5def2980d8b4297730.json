@@ -1,1 +1,0 @@
-{"nodes": [{"id": "student_picker_app", "label": "student-picker TUI Application", "file_type": "document", "source_file": "README.md"}], "edges": [{"source": "student_picker_app", "target": "skill_bubbletea", "relation": "implements", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "README.md"}], "hyperedges": []}

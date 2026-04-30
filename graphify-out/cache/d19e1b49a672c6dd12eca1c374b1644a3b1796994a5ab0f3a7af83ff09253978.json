@@ -1,1 +1,0 @@
-{"nodes": [{"id": "skill_bubbletea", "label": "Bubbletea TUI Skill", "file_type": "document", "source_file": "SKILL.md"}], "edges": [{"source": "skill_bubbletea", "target": "golden_rules_4_golden_rules", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "SKILL.md"}], "hyperedges": []}
