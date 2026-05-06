@@ -25,17 +25,17 @@ assignees: ''
 
 | Field | Value |
 |-------|-------|
-| student-picker version | <!-- run: student-picker --version --> |
+| schale-pick version | <!-- run: schale-pick --version --> |
 | Terminal emulator | <!-- e.g. Kitty 0.36.4 / WezTerm / Ghostty --> |
 | OS / distro | <!-- e.g. Arch Linux (CachyOS), kernel 6.9.x --> |
 
 ## Debug log
 
-<!-- Run with `student-picker --debug`, reproduce the issue,
-     then paste /tmp/student-picker-debug.log here. -->
+<!-- Run with `schale-pick --debug`, reproduce the issue,
+     then paste /tmp/schale-pick-debug.log here. -->
 
 <details>
-<summary>student-picker-debug.log</summary>
+<summary>schale-pick-debug.log</summary>
 
 ```
 paste here

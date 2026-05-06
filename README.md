@@ -1,11 +1,11 @@
-# student-picker
+# schale-pick
 
 A terminal UI for swapping the [fastfetch](https://github.com/fastfetch-cli/fastfetch) logo
 with a Blue Archive student portrait. Browse the full SchaleDB roster, preview portraits
 inline using the Kitty Graphics Protocol, and rewrite your fastfetch `config.jsonc` with one
 keystroke.
 
-![student-picker](.github/screenshot.png)
+![schale-pick](.github/screenshot.png)
 
 ## Features
 
@@ -45,47 +45,47 @@ sudo apt install fastfetch jq imagemagick
 
 ## Install
 
-> `student-picker` is not yet on the AUR. Install via the pre-built binary below.
+> `schale-pick` is not yet on the AUR. Install via the pre-built binary below.
 
 ### Pre-built binary (recommended)
 
-Download the latest release from the [Releases page](https://github.com/dungdinhmanh/student-picker/releases/latest):
+Download the latest release from the [Releases page](https://github.com/dungdinhmanh/schale-pick/releases/latest):
 
 ```bash
 # Linux x86_64
-curl -L https://github.com/dungdinhmanh/student-picker/releases/latest/download/student-picker-linux-amd64 \
-  -o student-picker
-chmod +x student-picker
-sudo mv student-picker /usr/local/bin/
+curl -L https://github.com/dungdinhmanh/schale-pick/releases/latest/download/schale-pick-linux-amd64 \
+  -o schale-pick
+chmod +x schale-pick
+sudo mv schale-pick /usr/local/bin/
 ```
 
 ```bash
 # Linux ARM64
-curl -L https://github.com/dungdinhmanh/student-picker/releases/latest/download/student-picker-linux-arm64 \
-  -o student-picker
-chmod +x student-picker
-sudo mv student-picker /usr/local/bin/
+curl -L https://github.com/dungdinhmanh/schale-pick/releases/latest/download/schale-pick-linux-arm64 \
+  -o schale-pick
+chmod +x schale-pick
+sudo mv schale-pick /usr/local/bin/
 ```
 
 Verify the checksum:
 
 ```bash
-sha256sum -c student-picker-linux-amd64.sha256
+sha256sum -c schale-pick-linux-amd64.sha256
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/dungdinhmanh/student-picker
-cd student-picker
-go build -o student-picker .
-sudo install -m 0755 student-picker /usr/local/bin/
+git clone https://github.com/dungdinhmanh/schale-pick
+cd schale-pick
+go build -o schale-pick .
+sudo install -m 0755 schale-pick /usr/local/bin/
 ```
 
 ## Usage
 
 ```bash
-student-picker
+schale-pick
 ```
 
 | Key           | Action                                            |
@@ -102,11 +102,11 @@ student-picker
 ### CLI flags
 
 ```
-student-picker [flags]
+schale-pick [flags]
 
   --version       print version and exit
   --clear-cache   delete all cached portraits and exit
-  --debug         write debug log to /tmp/student-picker-debug.log
+  --debug         write debug log to /tmp/schale-pick-debug.log
   --help          show this help
 ```
 
@@ -132,7 +132,7 @@ fields are preserved. A `.bak` is written on first run if auto-backup is enabled
 ## Cache layout
 
 ```
-~/.cache/student-picker/
+~/.cache/schale-pick/
 ├── students.json          # SchaleDB roster (fetched on startup, used offline as fallback)
 ├── meta.json              # student ID → name mapping for offline use
 └── portrait/

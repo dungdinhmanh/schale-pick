@@ -1,4 +1,4 @@
-# Contributing to student-picker
+# Contributing to schale-pick
 
 Thank you for taking the time to contribute! Please read this guide before opening issues or pull requests.
 
@@ -28,17 +28,17 @@ Thank you for taking the time to contribute! Please read this guide before openi
 **Fork & clone**
 
 ```bash
-git clone https://github.com/dungdinhmanh/student-picker
-cd student-picker
+git clone https://github.com/dungdinhmanh/schale-pick
+cd schale-pick
 go build .
 ```
 
 **Run locally**
 
 ```bash
-./student-picker
+./schale-pick
 # or with debug logging
-./student-picker --debug
+./schale-pick --debug
 ```
 
 ---

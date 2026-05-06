@@ -1,4 +1,4 @@
-module student-picker
+module schale-pick
 
 go 1.25.0
 

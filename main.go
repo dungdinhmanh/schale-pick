@@ -18,22 +18,22 @@ var version = "0.1.0" // overridden at build time via -ldflags "-X main.version=
 var debugLog = log.New(io.Discard, "", log.LstdFlags)
 
 func main() {
-	debug      := flag.Bool("debug",       false, "write debug log to /tmp/student-picker-debug.log")
+	debug      := flag.Bool("debug",       false, "write debug log to /tmp/schale-pick-debug.log")
 	showVer    := flag.Bool("version",     false, "print version and exit")
 	clearCache := flag.Bool("clear-cache", false, "delete all cached portraits and exit")
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stdout, "student-picker %s\n", version)
+		fmt.Fprintf(os.Stdout, "schale-pick %s\n", version)
 		fmt.Fprintln(os.Stdout, "")
 		fmt.Fprintln(os.Stdout, "Browse Blue Archive student portraits and set one as your fastfetch logo.")
 		fmt.Fprintln(os.Stdout, "")
 		fmt.Fprintln(os.Stdout, "USAGE:")
-		fmt.Fprintln(os.Stdout, "  student-picker [flags]")
+		fmt.Fprintln(os.Stdout, "  schale-pick [flags]")
 		fmt.Fprintln(os.Stdout, "")
 		fmt.Fprintln(os.Stdout, "FLAGS:")
 		fmt.Fprintln(os.Stdout, "  --version       print version and exit")
 		fmt.Fprintln(os.Stdout, "  --clear-cache   delete all cached portraits and exit")
-		fmt.Fprintln(os.Stdout, "  --debug         write debug log to /tmp/student-picker-debug.log")
+		fmt.Fprintln(os.Stdout, "  --debug         write debug log to /tmp/schale-pick-debug.log")
 		fmt.Fprintln(os.Stdout, "  --help          show this help")
 		fmt.Fprintln(os.Stdout, "")
 		fmt.Fprintln(os.Stdout, "KEYS (inside the TUI):")
@@ -51,7 +51,7 @@ func main() {
 	flag.Parse()
 
 	if *showVer {
-		fmt.Printf("student-picker %s\n", version)
+		fmt.Printf("schale-pick %s\n", version)
 		os.Exit(0)
 	}
 
@@ -66,10 +66,10 @@ func main() {
 	}
 
 	if *debug {
-		f, err := os.OpenFile("/tmp/student-picker-debug.log", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		f, err := os.OpenFile("/tmp/schale-pick-debug.log", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err == nil {
 			debugLog = log.New(f, "", log.LstdFlags)
-			if lf, lerr := tea.LogToFile("/tmp/student-picker-debug.log", "bubbletea"); lerr == nil {
+			if lf, lerr := tea.LogToFile("/tmp/schale-pick-debug.log", "bubbletea"); lerr == nil {
 				defer lf.Close()
 			}
 			defer f.Close()

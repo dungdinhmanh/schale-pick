@@ -38,5 +38,5 @@ func CacheDir() string {
 	if homeDir == "" {
 		homeDir = "/tmp"
 	}
-	return path.Join(homeDir, ".cache", "student-picker")
+	return path.Join(homeDir, ".cache", "schale-pick")
 }
