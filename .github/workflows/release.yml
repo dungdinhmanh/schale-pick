@@ -198,23 +198,24 @@ jobs:
           sed -i "s/^pkgver=.*/pkgver=${PKGVER}/" packaging/aur/schale-pick-bin/PKGBUILD
           sed -i "s/^pkgrel=.*/pkgrel=1/"         packaging/aur/schale-pick-bin/PKGBUILD
           chown -R builder:builder packaging/aur/schale-pick-bin
-          su builder -c '
-            cd /github/workspace/packaging/aur/schale-pick-bin
+          su builder -c "
+            cd $GITHUB_WORKSPACE/packaging/aur/schale-pick-bin
             updpkgsums
             makepkg --printsrcinfo > .SRCINFO
-          '
+          "
 
       - name: Push to AUR
         env:
           VERSION: ${{ github.ref_name }}
         run: |
+          set -euo pipefail
           git config --global user.name  "dungdinhmanh"
           git config --global user.email "dungdinhmanh0209@gmail.com"
           git -c init.defaultBranch=master clone \
             ssh://aur@aur.archlinux.org/schale-pick-bin.git /tmp/aur-repo
-          cp packaging/aur/schale-pick-bin/PKGBUILD \
-             packaging/aur/schale-pick-bin/.SRCINFO \
-             packaging/aur/schale-pick-bin/LICENSE \
+          cp $GITHUB_WORKSPACE/packaging/aur/schale-pick-bin/PKGBUILD \
+             $GITHUB_WORKSPACE/packaging/aur/schale-pick-bin/.SRCINFO \
+             $GITHUB_WORKSPACE/packaging/aur/schale-pick-bin/LICENSE \
              /tmp/aur-repo/
           cd /tmp/aur-repo
           git add PKGBUILD .SRCINFO LICENSE
