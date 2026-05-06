@@ -157,3 +157,29 @@ jobs:
         with:
           files: dist/*
           generate_release_notes: true
+
+  deploy-aur:
+    name: Publish to AUR
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bump pkgver in PKGBUILD to match tag
+        run: |
+          PKGVER="${GITHUB_REF_NAME#v}"
+          sed -i "s/^pkgver=.*/pkgver=${PKGVER}/" packaging/aur/schale-pick-bin/PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/"         packaging/aur/schale-pick-bin/PKGBUILD
+
+      - name: Publish to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
+        with:
+          pkgname: schale-pick-bin
+          pkgbuild: packaging/aur/schale-pick-bin/PKGBUILD
+          commit_username: dungdinhmanh
+          commit_email: dungdinhmanh@users.noreply.github.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "upgpkg: schale-pick-bin ${{ github.ref_name }}"
+          updpkgsums: true
+          allow_empty_commits: false
