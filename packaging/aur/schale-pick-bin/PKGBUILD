@@ -2,7 +2,7 @@
 
 pkgname=schale-pick-bin
 _pkgname=schale-pick
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="Terminal UI to swap the fastfetch logo with a Blue Archive student portrait"
 arch=('x86_64' 'aarch64')
