@@ -178,7 +178,7 @@ jobs:
           pkgname: schale-pick-bin
           pkgbuild: packaging/aur/schale-pick-bin/PKGBUILD
           commit_username: dungdinhmanh
-          commit_email: dungdinhmanh@users.noreply.github.com
+          commit_email: dungdinhmanh0209@gmail.com
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           commit_message: "upgpkg: schale-pick-bin ${{ github.ref_name }}"
           updpkgsums: true
