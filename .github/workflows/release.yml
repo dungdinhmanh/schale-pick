@@ -162,24 +162,65 @@ jobs:
     name: Publish to AUR
     needs: release
     runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+      options: --user root
+
     steps:
+      - name: Install build deps
+        run: |
+          pacman -Syu --noconfirm --needed \
+            base-devel git openssh pacman-contrib nodejs sudo
+
+      - name: Create builder user
+        run: |
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Bump pkgver in PKGBUILD to match tag
+      - name: Configure SSH for AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
         run: |
-          PKGVER="${GITHUB_REF_NAME#v}"
+          install -dm700 /root/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > /root/.ssh/aur
+          chmod 600 /root/.ssh/aur
+          ssh-keyscan -t ed25519 aur.archlinux.org >> /root/.ssh/known_hosts
+          echo "GIT_SSH_COMMAND=ssh -i /root/.ssh/aur -o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
+
+      - name: Bump pkgver + updpkgsums + regen .SRCINFO
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          PKGVER="${VERSION#v}"
           sed -i "s/^pkgver=.*/pkgver=${PKGVER}/" packaging/aur/schale-pick-bin/PKGBUILD
           sed -i "s/^pkgrel=.*/pkgrel=1/"         packaging/aur/schale-pick-bin/PKGBUILD
+          chown -R builder:builder packaging/aur/schale-pick-bin
+          su builder -c '
+            cd /github/workspace/packaging/aur/schale-pick-bin
+            updpkgsums
+            makepkg --printsrcinfo > .SRCINFO
+          '
 
-      - name: Publish to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
-        with:
-          pkgname: schale-pick-bin
-          pkgbuild: packaging/aur/schale-pick-bin/PKGBUILD
-          commit_username: dungdinhmanh
-          commit_email: dungdinhmanh0209@gmail.com
-          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "upgpkg: schale-pick-bin ${{ github.ref_name }}"
-          updpkgsums: true
-          allow_empty_commits: false
+      - name: Push to AUR
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          git config --global user.name  "dungdinhmanh"
+          git config --global user.email "dungdinhmanh0209@gmail.com"
+          git -c init.defaultBranch=master clone \
+            ssh://aur@aur.archlinux.org/schale-pick-bin.git /tmp/aur-repo
+          cp packaging/aur/schale-pick-bin/PKGBUILD \
+             packaging/aur/schale-pick-bin/.SRCINFO \
+             packaging/aur/schale-pick-bin/LICENSE \
+             /tmp/aur-repo/
+          cd /tmp/aur-repo
+          git add PKGBUILD .SRCINFO LICENSE
+          if git diff --cached --quiet; then
+            echo "Nothing changed — skipping push."
+            exit 0
+          fi
+          git commit -m "upgpkg: schale-pick-bin ${VERSION}"
+          git push
