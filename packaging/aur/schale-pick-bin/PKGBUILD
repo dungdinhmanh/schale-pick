@@ -14,9 +14,9 @@ conflicts=("${_pkgname}")
 source=("LICENSE-${pkgver}::${url}/raw/v${pkgver}/LICENSE")
 source_x86_64=("${_pkgname}-${pkgver}-x86_64::${url}/releases/download/v${pkgver}/${_pkgname}-linux-amd64")
 source_aarch64=("${_pkgname}-${pkgver}-aarch64::${url}/releases/download/v${pkgver}/${_pkgname}-linux-arm64")
-sha256sums=('SKIP')
-sha256sums_x86_64=('SKIP')
-sha256sums_aarch64=('SKIP')
+sha256sums=('8695ed1dcccb2b4d357aab6472a21d9a972ace797ea630fba7f619871655ab4b')
+sha256sums_x86_64=('f20536baa805202728fde69f9f9e7ae2355cf93c1d57cae57b019e450caf28e7')
+sha256sums_aarch64=('cbdad14818c5d05df832c9e39ef125aea9fa88dbc127d3241132ad56be7cdf1c')
 
 package() {
     install -Dm755 "${srcdir}/${_pkgname}-${pkgver}-${CARCH}" "${pkgdir}/usr/bin/${_pkgname}"
