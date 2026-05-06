@@ -188,7 +188,8 @@ jobs:
           printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > /root/.ssh/aur
           chmod 600 /root/.ssh/aur
           ssh-keyscan -t ed25519 aur.archlinux.org >> /root/.ssh/known_hosts
-          echo "GIT_SSH_COMMAND=ssh -i /root/.ssh/aur -o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
+          eval "$(ssh-agent -s)"
+          ssh-add /root/.ssh/aur
 
       - name: Bump pkgver + updpkgsums + regen .SRCINFO
         env:
