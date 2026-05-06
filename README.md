@@ -45,9 +45,51 @@ sudo apt install fastfetch jq imagemagick
 
 ## Install
 
-> `schale-pick` is not yet on the AUR. Install via the pre-built binary below.
+### Arch Linux
 
-### Pre-built binary (recommended)
+#### Option 1 — AUR (once published)
+
+[`schale-pick-bin`](https://aur.archlinux.org/packages/schale-pick-bin) tracks
+the pre-built binary from the latest GitHub release and pulls in `fastfetch`,
+`jq`, and `imagemagick` automatically.
+
+```bash
+yay  -S schale-pick-bin
+# or: paru -S schale-pick-bin
+```
+
+> Maintainer notes: see [`packaging/aur/README.md`](packaging/aur/README.md).
+
+#### Option 2 — install the pre-built `.pkg.tar.zst`
+
+Each tagged release ships an x86_64 Arch package built in CI. Download the
+latest one from the [Releases page](https://github.com/dungdinhmanh/schale-pick/releases/latest)
+and install it with pacman:
+
+```bash
+curl -LO https://github.com/dungdinhmanh/schale-pick/releases/latest/download/schale-pick-bin-x86_64.pkg.tar.zst
+sudo pacman -U schale-pick-bin-x86_64.pkg.tar.zst
+```
+
+Verify the checksum first if you like:
+
+```bash
+curl -LO https://github.com/dungdinhmanh/schale-pick/releases/latest/download/schale-pick-bin-x86_64.pkg.tar.zst.sha256
+sha256sum -c schale-pick-bin-x86_64.pkg.tar.zst.sha256
+```
+
+#### Option 3 — build from the bundled PKGBUILD (works on any arch)
+
+```bash
+git clone --depth=1 https://github.com/dungdinhmanh/schale-pick
+cd schale-pick/packaging/aur/schale-pick-bin
+makepkg -si
+```
+
+`makepkg` will fetch the matching binary (`amd64` or `arm64`) from the GitHub
+release and install it.
+
+### Pre-built binary (other Linux)
 
 Download the latest release from the [Releases page](https://github.com/dungdinhmanh/schale-pick/releases/latest):
 

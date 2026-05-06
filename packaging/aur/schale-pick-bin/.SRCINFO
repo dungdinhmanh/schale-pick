@@ -1,0 +1,21 @@
+pkgbase = schale-pick-bin
+	pkgdesc = Terminal UI to swap the fastfetch logo with a Blue Archive student portrait
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/dungdinhmanh/schale-pick
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	depends = fastfetch
+	depends = jq
+	depends = imagemagick
+	provides = schale-pick
+	conflicts = schale-pick
+	source = LICENSE-0.1.0::https://github.com/dungdinhmanh/schale-pick/raw/v0.1.0/LICENSE
+	sha256sums = SKIP
+	source_x86_64 = schale-pick-0.1.0-x86_64::https://github.com/dungdinhmanh/schale-pick/releases/download/v0.1.0/schale-pick-linux-amd64
+	sha256sums_x86_64 = SKIP
+	source_aarch64 = schale-pick-0.1.0-aarch64::https://github.com/dungdinhmanh/schale-pick/releases/download/v0.1.0/schale-pick-linux-arm64
+	sha256sums_aarch64 = SKIP
+
+pkgname = schale-pick-bin

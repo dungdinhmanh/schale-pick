@@ -53,9 +53,97 @@ jobs:
             schale-pick-${{ matrix.goos }}-${{ matrix.goarch }}
             schale-pick-${{ matrix.goos }}-${{ matrix.goarch }}.sha256
 
+  package-arch:
+    name: Build Arch package (x86_64)
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+      options: --user root
+
+    steps:
+      # archlinux:latest ships pacman + glibc but not nodejs/git, both of which
+      # the GitHub-provided actions need to run. Install them first.
+      - name: Install build deps
+        run: |
+          pacman -Syu --noconfirm --needed \
+            base-devel git nodejs sudo
+
+      - name: Create unprivileged builder user
+        run: |
+          useradd -m -G wheel builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download amd64 binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: schale-pick-linux-amd64
+          path: ./binary/
+
+      - name: Stage build directory
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -eu
+          BUILD=/home/builder/build
+          mkdir -p "$BUILD"
+
+          # Canonical PKGBUILD downloads the binary from the GitHub release
+          # URL, which doesn't exist yet at this point. Copy it and rewrite
+          # the source arrays to consume the artifact we just built locally.
+          # The license shipped in /usr/share/licenses/<pkg>/LICENSE must be
+          # the upstream project's license (MIT), so use the repo-root LICENSE.
+          cp packaging/aur/schale-pick-bin/PKGBUILD "$BUILD/"
+          cp LICENSE                                "$BUILD/"
+          cp ./binary/schale-pick-linux-amd64       "$BUILD/"
+
+          # Strip leading 'v' from the tag (PKGBUILD pkgver is unprefixed).
+          PKGVER="${VERSION#v}"
+
+          cd "$BUILD"
+          sed -i \
+            -e "s|^pkgver=.*|pkgver=${PKGVER}|" \
+            -e 's|^source=.*|source=("LICENSE")|' \
+            -e 's|^source_x86_64=.*|source_x86_64=("schale-pick-linux-amd64")|' \
+            -e '/^source_aarch64=/d' \
+            -e '/^sha256sums_aarch64=/d' \
+            -e 's|"${srcdir}/${_pkgname}-${pkgver}-${CARCH}"|"${srcdir}/schale-pick-linux-amd64"|' \
+            -e 's|"${srcdir}/LICENSE-${pkgver}"|"${srcdir}/LICENSE"|' \
+            PKGBUILD
+
+          chown -R builder:builder "$BUILD"
+
+      - name: Build .pkg.tar.zst
+        run: |
+          set -eu
+          su builder -c '
+            set -eu
+            cd /home/builder/build
+            makepkg -f --noconfirm --nodeps --skipinteg
+          '
+          cp /home/builder/build/*.pkg.tar.zst .
+          # Version-stable alias so users can curl
+          # /releases/latest/download/schale-pick-bin-x86_64.pkg.tar.zst
+          # without first looking up the exact pkgver-pkgrel.
+          versioned=$(ls schale-pick-bin-*-x86_64.pkg.tar.zst | head -n1)
+          cp "$versioned" schale-pick-bin-x86_64.pkg.tar.zst
+          sha256sum schale-pick-bin-x86_64.pkg.tar.zst \
+            > schale-pick-bin-x86_64.pkg.tar.zst.sha256
+
+      - name: Upload pkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: schale-pick-arch-x86_64-pkg
+          path: |
+            ./schale-pick-bin-*.pkg.tar.zst
+            ./schale-pick-bin-x86_64.pkg.tar.zst.sha256
+
   release:
     name: Create Release
-    needs: build
+    needs: [build, package-arch]
     runs-on: ubuntu-latest
     steps:
       - name: Download all artifacts
